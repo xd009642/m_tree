@@ -5,6 +5,7 @@
 #include <type_traits>
 #include <memory>
 #include <vector>
+#include <algorithm>
 #include "boost\variant\variant.hpp"
 
 namespace mt
@@ -25,7 +26,11 @@ namespace mt
 		{feature value of DB object, object id, distance to parent}
 	
 	*/
+	template<class T, class R, class Enable = void>
+	class M_Tree
+	{
 
+	};
 	/*
 		An M-Tree is a tree that partions elements in metric space so as to minimise the distance between them.
 
@@ -34,9 +39,11 @@ namespace mt
 		The distance function must return an unsigned numeric type, can only be zero if the compared values are equal,
 		is reflexive and obeys the triangle inequality.
 		*/
-	template<T, std::function<R(const T&, const T&)> d, std::enable_if<std::is_arithmetic<R>>>
-	class M_Tree
+	template<class T, class R>
+	class M_Tree<T, R, typename std::enable_if<std::is_arithmetic<R>::value>::type>
 	{
+		struct Tree_Node;
+		
 		struct Routing_Object
 		{
 			//object at the centre of the sphere, all children are <= cover_radius away.
@@ -53,12 +60,12 @@ namespace mt
 		struct Tree_Node
 		{
 			std::weak_ptr<Tree_Node> parent;
-			boost::variant<mt::Routing_Object, mt::Leaf_Node> data;
+			boost::variant<mt::Routing_Object, mt::Leaf_Object> data;
 			R dist_parent;
 		};
 
 	public:
-		M_Tree();
+		M_Tree(std::function<R(const T&, const T&)> distanceFunction) :d(distanceFunction){}
 		M_Tree(M_Tree& tree);
 		~M_Tree();
 
@@ -67,7 +74,12 @@ namespace mt
 
 		void insert(const T& t);
 
-		void clear();
+		void clear()
+		{
+			//Need to ensure that the children are deleted...
+			root.reset();
+		}
+
 		void erase();
 
 		// pre/in/post order
@@ -82,49 +94,56 @@ namespace mt
 		//split
 		//partition
 	private:
+		std::function<R(const T&, const T&)> d;
 		std::shared_ptr<Tree_Node> root;
 		size_t leaf_capacity;
 	};
 
-	template<T, std::function<R(const T&, const T&)> d, std::enable_if<std::is_arithmetic<R>>>
-	M_Tree::M_Tree()
-	{
-		
-	}
 
-	template<T, std::function<R(const T&, const T&)> d, std::enable_if<std::is_arithmetic<R>>>
-	M_Tree::M_Tree(M_Tree& tree)
+
+	template<class T, class R, class Enable>
+	M_Tree<T, R, Enable>::M_Tree(M_Tree& tree)
 	{
 
 	}
 
-	template<T, std::function<R(const T&, const T&)> d, std::enable_if<std::is_arithmetic<R>>>
-	M_Tree::~M_Tree()
+	template<class T, class R, class Enable>
+	M_Tree<T, R, Enable>::~M_Tree()
 	{
 
 	}
 
-	template<T, std::function<R(const T&, const T&)> d, std::enable_if<std::is_arithmetic<R>>>
-	void M_Tree::insert(const T& t)
+	template<class T, class R, class Enable>
+	void M_Tree<T, R, Enable>::insert(const T& t)
 	{
 		insert(t, root);
 	}
 
-	template<T, std::function<R(const T&, const T&)> d, std::enable_if<std::is_arithmetic<R>>>
-	void M_Tree::insert(const T& t, std::weak_ptr<Tree_Node> N)
+	template<class T, class R, class Enable>
+	void M_Tree<T, R, Enable>::insert(const T& t, std::weak_ptr<Tree_Node> N)
 	{
 		if (N)
 		{
 			if (N.get()->data.type() == typeid(Routing_Object))
 			{
 				std::vector<R> dists;
-				for (Routing_Object<T, R>& r : N.get()->data)
+				Routing_Object<T, R>& r = N.get()->data;
+				for (int i = 0; i < r.children.size(); i++)
 				{
-					if (r.obj)
+					std::weak_ptr<Tree_Node> nr = r[i].lock();
+					if (nr)
 					{
-						dists.push_back(d(r.obj, t));
+						dists.push_back(d(nr.get()->obj, t));
 					}
 				}
+				auto minN=std::min_element(std::begin(dists), std::end(dists) ;
+
+				if (minN > N.get()->cover_radius)
+				{
+					//
+				}
+				
+				return insert(t, r.children[std::distance(std::begin(dists), minN)]);
 			}
 			else if (N.get()->data.type() == typeid(Leaf_Object))
 			{
