@@ -17,14 +17,12 @@ namespace mt
 		//object at the centre of the sphere, all children are <= cover_radius away.
 		std::weak_ptr<T> obj;
 		std::vector<std::shared_ptr<Tree_Node>> children;
-		R dist_parent; //if no children check distance? Or maybe there is a better TMP method
 		R cover_radius;
 	};
 
 	template<T, R, std::enable_if<std::is_arithmetic<R>>>
-	struct Leaf_Node
+	struct Leaf_Object
 	{
-		R dist_parent;
 		std::vector<std::weak_ptr<T>> values;
 	};
 
@@ -33,6 +31,7 @@ namespace mt
 	{
 		std::weak_ptr<Tree_Node> parent; 
 		boost::variant<mt::Routing_Object, mt::Leaf_Node> data;
+		R dist_parent;
 	};
 
 
@@ -68,6 +67,7 @@ namespace mt
 		bool empty() const;
 
 		void insert(const T& t);
+		//void insert(
 		void clear();
 		void erase();
 
