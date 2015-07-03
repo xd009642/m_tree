@@ -5,39 +5,48 @@
 #include <type_traits>
 #include <memory>
 #include <vector>
-
+#include "boost\variant\variant.hpp"
 
 namespace mt
 {
 
-	//leaf and internal nodes and parent child distances?
+
 	template <T, R, std::enable_if<std::is_arithmetic<R>>>
-	class Tree_Node
+	struct Routing_Object
 	{
-	public:
-		Tree_Node()
-		{
-
-		}
-
-		Tree_Node(const T& t) :data(t), dist_parent(-1), cover_radius(-1)
-		{
-
-		}
-
-		Tree_Node(R distance, R radius) : dist_parent(distance), cover_radius(radius)
-		{
-
-		}
-
-
+		//object at the centre of the sphere, all children are <= cover_radius away.
+		std::weak_ptr<T> obj;
+		std::vector<std::shared_ptr<Tree_Node>> children;
 		R dist_parent; //if no children check distance? Or maybe there is a better TMP method
 		R cover_radius;
-		T data;
-		std::weak_ptr<Tree_Node> parent; //weak
-		std::vector<std::shared_ptr<Tree_Node>> children; //shared
-		//siblings?
 	};
+
+	template<T, R, std::enable_if<std::is_arithmetic<R>>>
+	struct Leaf_Node
+	{
+		R dist_parent;
+		std::vector<std::weak_ptr<T>> values;
+	};
+
+	template <T, R, std::enable_if<std::is_arithmetic<R>>>
+	struct Tree_Node
+	{
+		std::weak_ptr<Tree_Node> parent; 
+		boost::variant<mt::Routing_Object, mt::Leaf_Node> data;
+	};
+
+
+
+	/*
+		So internal nodes are represented by:
+
+		{feature value of rooting object, parent point, covering radius, distance to parent}
+
+		and leaf nodes are represented by:
+		
+		{feature value of DB object, object id, distance to parent}
+	
+	*/
 
 	/*
 		An M-Tree is a tree that partions elements in metric space so as to minimise the distance between them.
@@ -66,6 +75,8 @@ namespace mt
 		//begin end
 
 		//range and nearest neighbour searches
+		std::vector<T> rangeQuery(const T& ref, R range);
+		std::vector<T> knnQuery(const T& ref, int k);
 	protected:
 		//split
 		//partition
@@ -76,7 +87,7 @@ namespace mt
 	template<T, std::function<R(const T&, const T&)> d, std::enable_if<std::is_arithmetic<R>>>
 	M_Tree::M_Tree()
 	{
-
+		
 	}
 
 	template<T, std::function<R(const T&, const T&)> d, std::enable_if<std::is_arithmetic<R>>>
@@ -95,8 +106,10 @@ namespace mt
 	void M_Tree::insert(const T& t)
 	{
 		Tree_Node n(t);
-
 	}
 
 }
+
+
+
 #endif 
