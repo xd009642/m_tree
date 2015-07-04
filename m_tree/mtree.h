@@ -47,16 +47,12 @@ namespace mt
 		};
 
 	public:
-		M_Tree(std::function<R(const T&, const T&)> distanceFunction) :d(distanceFunction)
-		{
-
-		}
-	/*	M_Tree()
-		{
-			static_assert(std::is_arithmetic<R>::value, "distance function must return arithmetic type");
-		}*/
-
+		//Constructors and destructors 
+		M_Tree(std::function<R(const T&, const T&)> distanceFunction);
+		M_Tree();
 		~M_Tree();
+
+		void setDistanceFunction(std::function<R(const T&, const T&)> distanceFunction);
 
 		size_t size() const;
 		bool empty() const;
@@ -88,7 +84,25 @@ namespace mt
 		size_t leaf_capacity;
 	};
 	
+	template<class T, class R>
+	M_Tree<T, R>::M_Tree(std::function<R(const T&, const T&)> distanceFunction) : d(distanceFunction)
+	{
+		static_assert(std::is_arithmetic<R>::value, "distance function must return arithmetic type");
+	}
 
+	template<class T, class R>
+	M_Tree<T, R>::M_Tree()
+	{
+		static_assert(std::is_arithmetic<R>::value, "distance function must return arithmetic type");
+	}
+
+
+
+	template<class T, class R>
+	void M_Tree<T, R>::setDistanceFunction(std::function<R(const T&, const T&)> distanceFunction)
+	{
+
+	}
 
 	template<class T, class R>
 	M_Tree<T, R>::~M_Tree()
