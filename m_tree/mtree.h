@@ -7,11 +7,27 @@
 #include <vector>
 #include <algorithm>
 #include "boost\variant\variant.hpp"
+#include "boost\variant\get.hpp"
 
 namespace mt
 {
+	/*
+		Taken from "M-tree: An Efficient Access Method for Similarity Search in Metric Spaces"
+		(P. Ciaccia, M. Patella, P. Zezula). Defines the method used when splitting a leaf node up 
+		upon reaching capacity.
 
+		Strategies are:
 
+		MIN_RAD : Minimise the sum of covering radii of resulting nodes (most expensive operation)
+		MIN_MAXRAD: Minimises the maximum of the two radii
+		M_LB_DIST: "Maximum Lower Bound on Distance" only uses precomputed distance values unlike previous methods
+		RANDOM: Selects reference objects randomly - fast but naive 
+		SAMPLING: Like random but takes multiple random samples with the aim of choosing the best
+	*/
+	enum class split_policy
+	{
+		MIN_RAD, MIN_MAXRAD, M_LB_DIST, RANDOM, SAMPLING
+	};
 	/*
 		An M-Tree is a tree that partions elements in metric space so as to minimise the distance between them.
 
@@ -26,30 +42,30 @@ namespace mt
 		struct Tree_Node;
 		struct Routing_Object;
 		struct Leaf_Object;
+
 		struct Routing_Object
 		{
 			//object at the centre of the sphere, all children are <= cover_radius away.
-			std::weak_ptr<T> obj;
+			std::unique_ptr<T> obj;
 			std::vector<std::shared_ptr<Tree_Node>> children;
 			R cover_radius;
 		};
 
 		struct Leaf_Object
 		{
-			std::vector<std::weak_ptr<T>> values;
+			std::vector<std::unique_ptr<T>> values;
 		};
 
 		struct Tree_Node
 		{
 			std::weak_ptr<Tree_Node> parent;
-			boost::variant<Routing_Object, Leaf_Object> data;
+			boost::variant<std::vector<Routing_Object>, Leaf_Object> data;
 			R dist_parent;
 		};
 
 	public:
 		//Constructors and destructors 
-		M_Tree(std::function<R(const T&, const T&)> distanceFunction);
-		M_Tree();
+		M_Tree(std::function<R(const T&, const T&)> distanceFunction = std::function<R(const T&, const T&)>(), size_t capacity = 3);
 		~M_Tree();
 
 		void setDistanceFunction(std::function<R(const T&, const T&)> distanceFunction);
@@ -74,9 +90,12 @@ namespace mt
 		std::vector<T> range_query(const T& ref, R range);
 		std::vector<T> knn_query(const T& ref, int k);
 	protected:
-
+		//insert functions, used to break up functionality or abstract away the implementation
 		void insert(const T& t, std::weak_ptr<Tree_Node> N);
-		//split
+		void insert_in_routing_object(const T& t, std::vector<Routing_Object>& r);
+		void insert_in_leaf_object(const T& t, Leaf_Object& l);
+
+		void split();
 		//partition
 	private:
 		std::function<R(const T&, const T&)> d;
@@ -85,16 +104,13 @@ namespace mt
 	};
 	
 	template<class T, class R>
-	M_Tree<T, R>::M_Tree(std::function<R(const T&, const T&)> distanceFunction) : d(distanceFunction)
+	M_Tree<T, R>::M_Tree(std::function<R(const T&, const T&)> distanceFunction, size_t capacity) : 
+		d(distanceFunction),
+		leaf_capacity(capacity)
 	{
 		static_assert(std::is_arithmetic<R>::value, "distance function must return arithmetic type");
 	}
 
-	template<class T, class R>
-	M_Tree<T, R>::M_Tree()
-	{
-		static_assert(std::is_arithmetic<R>::value, "distance function must return arithmetic type");
-	}
 
 
 
@@ -119,32 +135,16 @@ namespace mt
 	template<class T, class R>
 	void M_Tree<T, R>::insert(const T& t, std::weak_ptr<Tree_Node> N)
 	{
+		
 		if (N)
 		{
-			if (N.get()->data.type() == typeid(Routing_Object))
+			if (N.get()->data.type() == typeid(std::vector<Routing_Object>))
 			{
-				std::vector<R> dists;
-				Routing_Object<T, R>& r = N.get()->data;
-				for (int i = 0; i < r.children.size(); i++)
-				{
-					std::weak_ptr<Tree_Node> nr = r[i].lock();
-					if (nr)
-					{
-						dists.push_back(d(nr.get()->obj, t));
-					}
-				}
-				auto minN=std::min_element(std::begin(dists), std::end(dists));
-
-				if (minN > N.get()->cover_radius)
-				{
-					//
-				}
-				
-				return insert(t, r.children[std::distance(std::begin(dists), minN)]);
+				insert_in_routing_object(t, boost::get<std::vector<Routing_Object>>(N.get()->data));
 			}
 			else if (N.get()->data.type() == typeid(Leaf_Object))
 			{
-				
+				insert_in_leaf_object(t, boost::get<Leaf_Object>(N.get()->data));
 			}
 			else 
 			{
@@ -153,6 +153,49 @@ namespace mt
 		}
 	}
 
+	template<class T, class R>
+	void M_Tree<T, R>::insert_in_routing_object(const T& t, std::vector<Routing_Object>& r)
+	{
+		//Will numeric limits work with all arithmetic types?
+		std::vector<R> dists(r.size(), std::numeric_limits<R>::max());
+		for (int i = 0; i < r.size(); i++)
+		{
+			if (false == r[i].obj)
+				continue;
+			
+			R object_distance = d(t, *r[i].obj);
+			if (object_distance <= r[i].cover_radius)
+				dists[i] = object_distance;
+		}
+		auto min_elem = std::min_element(std::begin(dists), std::end(dists));
+		if (*min_elem == std::numeric_limits<R>::max())
+		{
+			for (int i = 0; i < r.size(); i++)
+			{
+				if (false == r[i].obj)
+					continue;
+
+				dists[i] = d(t, *r[i].obj) - r[i].cover_radius;
+			}
+			min_elem = std::min_element(std::begin(dists), std::end(dists));
+			r[std::distance(std::begin(dists), min_elem)].cover_radius = *min_elem
+		}
+		insert(t, r.children[std::distance(std::begin(dists), minN)]);
+	}
+
+	template<class T, class R>
+	void M_Tree<T, R>::insert_in_leaf_object(const T& t, Leaf_Object& l)
+	{
+		if (l.values.size() < leaf_capacity)
+		{
+			l.values.push_back(std::make_unique<T>(t));
+		}
+		else
+		{
+			// need to implement
+			split();
+		}
+	}
 }
 
 
