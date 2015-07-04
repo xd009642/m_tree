@@ -47,10 +47,14 @@ namespace mt
 		};
 
 	public:
-		M_Tree()
+		M_Tree(std::function<R(const T&, const T&)> distanceFunction) :d(distanceFunction)
+		{
+
+		}
+	/*	M_Tree()
 		{
 			static_assert(std::is_arithmetic<R>::value, "distance function must return arithmetic type");
-		}
+		}*/
 
 		~M_Tree();
 
@@ -79,7 +83,7 @@ namespace mt
 		//split
 		//partition
 	private:
-		std::function<R(T, T)> d;
+		std::function<R(const T&, const T&)> d;
 		std::shared_ptr<Tree_Node> root;
 		size_t leaf_capacity;
 	};
