@@ -12,25 +12,6 @@ namespace mt
 {
 
 
-	
-
-
-
-	/*
-		So internal nodes are represented by:
-
-		{feature value of rooting object, parent point, covering radius, distance to parent}
-
-		and leaf nodes are represented by:
-		
-		{feature value of DB object, object id, distance to parent}
-	
-	*/
-	template<class T, class R, class Enable = void>
-	class M_Tree
-	{
-
-	};
 	/*
 		An M-Tree is a tree that partions elements in metric space so as to minimise the distance between them.
 
@@ -39,11 +20,12 @@ namespace mt
 		The distance function must return an unsigned numeric type, can only be zero if the compared values are equal,
 		is reflexive and obeys the triangle inequality.
 		*/
-	template<class T, class R>
-	class M_Tree<T, R, typename std::enable_if<std::is_arithmetic<R>::value>::type>
+	template<class T, class R=double>
+	class M_Tree
 	{
 		struct Tree_Node;
-		
+		struct Routing_Object;
+		struct Leaf_Object;
 		struct Routing_Object
 		{
 			//object at the centre of the sphere, all children are <= cover_radius away.
@@ -60,13 +42,16 @@ namespace mt
 		struct Tree_Node
 		{
 			std::weak_ptr<Tree_Node> parent;
-			boost::variant<mt::Routing_Object, mt::Leaf_Object> data;
+			boost::variant<Routing_Object, Leaf_Object> data;
 			R dist_parent;
 		};
 
 	public:
-		M_Tree(std::function<R(const T&, const T&)> distanceFunction) :d(distanceFunction){}
-		M_Tree(M_Tree& tree);
+		M_Tree()
+		{
+			static_assert(std::is_arithmetic<R>::value, "distance function must return arithmetic type");
+		}
+
 		~M_Tree();
 
 		size_t size() const;
@@ -94,33 +79,27 @@ namespace mt
 		//split
 		//partition
 	private:
-		std::function<R(const T&, const T&)> d;
+		std::function<R(T, T)> d;
 		std::shared_ptr<Tree_Node> root;
 		size_t leaf_capacity;
 	};
+	
 
 
-
-	template<class T, class R, class Enable>
-	M_Tree<T, R, Enable>::M_Tree(M_Tree& tree)
+	template<class T, class R>
+	M_Tree<T, R>::~M_Tree()
 	{
 
 	}
 
-	template<class T, class R, class Enable>
-	M_Tree<T, R, Enable>::~M_Tree()
-	{
-
-	}
-
-	template<class T, class R, class Enable>
-	void M_Tree<T, R, Enable>::insert(const T& t)
+	template<class T, class R>
+	void M_Tree<T, R>::insert(const T& t)
 	{
 		insert(t, root);
 	}
 
-	template<class T, class R, class Enable>
-	void M_Tree<T, R, Enable>::insert(const T& t, std::weak_ptr<Tree_Node> N)
+	template<class T, class R>
+	void M_Tree<T, R>::insert(const T& t, std::weak_ptr<Tree_Node> N)
 	{
 		if (N)
 		{
@@ -136,7 +115,7 @@ namespace mt
 						dists.push_back(d(nr.get()->obj, t));
 					}
 				}
-				auto minN=std::min_element(std::begin(dists), std::end(dists) ;
+				auto minN=std::min_element(std::begin(dists), std::end(dists));
 
 				if (minN > N.get()->cover_radius)
 				{
@@ -157,7 +136,6 @@ namespace mt
 	}
 
 }
-
 
 
 #endif 
