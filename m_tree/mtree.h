@@ -93,16 +93,19 @@ namespace mt
 		//insert functions, used to break up functionality or abstract away the implementation
 		void insert(const T& t, std::weak_ptr<Tree_Node> N);
 		void insert_in_routing_object(const T& t, std::vector<Routing_Object>& r);
-		void insert_in_leaf_object(const T& t, Leaf_Object& l);
+		void insert_in_leaf_object(const T& t, std::weak_ptr<Tree_Node> l);
 
-		void split();
+		void split(const T& t, std::weak_ptr<Tree_Node> N);
 		//partition
 	private:
 		std::function<R(const T&, const T&)> d;
 		std::shared_ptr<Tree_Node> root;
 		size_t leaf_capacity;
+
 	};
 	
+
+
 	template<class T, class R>
 	M_Tree<T, R>::M_Tree(std::function<R(const T&, const T&)> distanceFunction, size_t capacity) : 
 		d(distanceFunction),
@@ -117,7 +120,7 @@ namespace mt
 	template<class T, class R>
 	void M_Tree<T, R>::setDistanceFunction(std::function<R(const T&, const T&)> distanceFunction)
 	{
-
+		d = distanceFunction;
 	}
 
 	template<class T, class R>
@@ -184,8 +187,13 @@ namespace mt
 	}
 
 	template<class T, class R>
-	void M_Tree<T, R>::insert_in_leaf_object(const T& t, Leaf_Object& l)
+	void M_Tree<T, R>::insert_in_leaf_object(const T& t, std::weak_ptr<Tree_Node> n)
 	{
+		static_assert(l.lock().get()->data.type() == typeid(Leaf_Object), 
+			"Routing object inputted into insert_in_leaf_object!");
+
+		Leaf_Object& l = boost::get<Leaf_Object>(n.lock().get()->data);
+
 		if (l.values.size() < leaf_capacity)
 		{
 			l.values.push_back(std::make_unique<T>(t));
@@ -193,7 +201,32 @@ namespace mt
 		else
 		{
 			// need to implement
-			split();
+			split(t, n);
+		}
+	}
+
+	template<class T, class R>
+	void M_Tree<T, R>::split(const T& t, std::weak_ptr<Tree_Node> N)
+	{
+		//create a new node
+		//create two new objects
+		//promote
+		//partition
+
+		if (root == N.lock())
+		{
+			//create a new node and set it as the new root and
+			//store the new routing objects
+		}
+		else
+		{
+			/* Now use the parent routing object to store
+			one of the new objects
+			
+			The second routing object is stored in the parent 
+			only if it has free capacity else the level above needs 
+			splitting!
+			*/
 		}
 	}
 }
