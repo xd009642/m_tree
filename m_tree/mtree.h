@@ -138,6 +138,8 @@ namespace mt
 	template<class T, size_t capacity, class R>
 	void M_Tree<T, capacity, R>::insert(const T& t)
 	{
+		if (!root)
+			root = std::make_shared<Tree_Node>();
 		insert(t, root);
 	}
 
@@ -153,10 +155,6 @@ namespace mt
 			else if (N.get()->data.type() == typeid(Leaf_Object))
 			{
 				insert_in_leaf_object(t, boost::get<Leaf_Object>(N.get()->data));
-			}
-			else 
-			{
-				//covers the edge case where a node exists but for some reason isn't leaf or internal. 
 			}
 		}
 	}
