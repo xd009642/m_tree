@@ -16,7 +16,7 @@ std::string dupe(const std::string& a, const std::string& b)
 int main()
 {
 	auto distance = std::function<int(const std::string&, const std::string&)>(dncr);
-	mt::M_Tree<std::string, int> tree = mt::M_Tree<std::string, int>(distance);
+	mt::M_Tree<std::string, 3, int> tree = mt::M_Tree<std::string, 3, int>(distance);
 
 	//auto darn = std::function<std::string(const std::string&, const std::string&)>(dupe);
 	//mt::M_Tree<std::string, std::string> badTree= mt::M_Tree<std::string, std::string>(darn);
