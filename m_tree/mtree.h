@@ -29,6 +29,7 @@ namespace mt
 	{
 		MIN_RAD, MIN_MAXRAD, M_LB_DIST, RANDOM, SAMPLING
 	};
+
 	/*
 		An M-Tree is a tree that partions elements in metric space so as to minimise the distance between them.
 
@@ -50,7 +51,7 @@ namespace mt
 			//object at the centre of the sphere, all children are <= cover_radius away.
 			std::weak_ptr<T> obj;
 			//std::vector<std::shared_ptr<Tree_Node>> children;
-			std::array<std::shared_ptr<Tree_Node>, capacity> children;
+			std::array<std::shared_ptr<Tree_Node>, capacity-1> children;
 			R cover_radius;
 		};
 
@@ -105,20 +106,24 @@ namespace mt
 		void insert_in_leaf_object(const T& t, std::weak_ptr<Tree_Node> l);
 
 		void split(const T& t, std::weak_ptr<Tree_Node> N);
-		//partition
-		//promote
+		void promote(std::vector<std::weak_ptr<T>> n, Routing_Object& o1, Routing_Object& o2);
+		void partition(std::vector<std::weak_ptr<T>> o, Tree_Node& n1, Tree_node& n2);
 	private:
 		std::function<R(const T&, const T&)> d;
 		std::shared_ptr<Tree_Node> root;
+		split_policy policy;
 	//	size_t capacity;
 
 	};
 	
 
 	template<class T, size_t capacity, class R>
-	M_Tree<T, capacity, R>::M_Tree(std::function<R(const T&, const T&)> distanceFunction) :d(distanceFunction)
+	M_Tree<T, capacity, R>::M_Tree(std::function<R(const T&, const T&)> distanceFunction):
+		d(distanceFunction)
+		policy(split_policy::M_LB_DIST)
 	{
 		static_assert(std::is_arithmetic<R>::value, "distance function must return arithmetic type");
+		static_assert(capacity > 1, "Node capacity must be >1");
 		root = std::make_shared<Tree_Node>();
 	}
 
@@ -190,6 +195,8 @@ namespace mt
 		insert(t, r.children[std::distance(std::begin(dists), min_elem)]);
 	}
 
+
+
 	template<class T, size_t capacity, class R>
 	void M_Tree<T, capacity, R>::insert_in_leaf_object(const T& t, std::weak_ptr<Tree_Node> n)
 	{
@@ -211,19 +218,23 @@ namespace mt
 	template<class T, size_t capacity, class R>
 	void M_Tree<T, capacity, R>::split(const T& t, std::weak_ptr<Tree_Node> N)
 	{
-		if (!N)
+		if (false == N)
+		{
 			return; // no node
+		}
 
 		bool is_root = root == N.lock();
-
+		std::weak_ptr<Tree_Node> split_node = N;
 		if (false == is_root)
 		{
-			//select parent
+			if (auto locked = N.lock())
+			{
+				split_node = locked->parent;
+			}
 		}
-		//create a new node
-		//create two new objects
-		//promote
-		//partition
+		Tree_Node new_node(0);
+		Routing_Object ro1, ro2;
+
 
 		if (is_root)
 		{
@@ -240,6 +251,18 @@ namespace mt
 			splitting!
 			*/
 		}
+	}
+
+	template<class T, size_t capacity, class R>
+	void M_Tree<T, capacity, R>::promote(std::vector<std::weak_ptr<T>> n, Routing_Object& o1, Routing_Object& o2)
+	{
+
+	}
+
+	template<class T, size_t capacity, class R>
+	void M_Tree<T, capacity, R>::partition(std::vector<std::weak_ptr<T>> o, Tree_Node& n1, Tree_node& n2)
+	{
+
 	}
 }
 
