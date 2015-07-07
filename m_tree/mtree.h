@@ -44,6 +44,7 @@ namespace mt
 		struct Tree_Node;
 		struct Routing_Object;
 		struct Leaf_Object;
+		friend std::array<Routing_Object, capacity>;
 
 		struct Routing_Object
 		{
@@ -81,7 +82,6 @@ namespace mt
 				return data.type() == typeid(std::array<Routing_Object, capacity>);
 			}
 		};
-
 	public:
 		//Constructors and destructors 
 		M_Tree(std::function<R(const T&, const T&)> distanceFunction = std::function<R(const T&, const T&)>());
@@ -112,11 +112,11 @@ namespace mt
 		//insert functions, used to break up functionality or abstract away the implementation
 		void insert(std::shared_ptr<T>t, std::weak_ptr<Tree_Node> N);
 		void insert_in_routing_object(std::shared_ptr<T> t, std::array<Routing_Object, capacity>& r);
-		void insert_in_leaf_object(std::shared_ptr<T> t, std::weak_ptr<Tree_Node> l);
+		void insert_in_leaf_object(std::shared_ptr<T> t, std::shared_ptr<Tree_Node> l);
 
 		void split(std::shared_ptr<T> t, std::weak_ptr<Tree_Node> N);
 		void promote(std::vector<std::weak_ptr<T>> n, Routing_Object& o1, Routing_Object& o2);
-		void partition(std::vector<std::weak_ptr<T>> o, Tree_Node& n1, Tree_Node& n2);
+		void partition(std::vector<std::weak_ptr<T>> o, Routing_Object& n1, Routing_Object& n2);
 	private:
 		std::function<R(const T&, const T&)> d;
 		std::shared_ptr<Tree_Node> root;
@@ -160,15 +160,15 @@ namespace mt
 	template<class T, size_t capacity, class R>
 	void M_Tree<T, capacity, R>::insert(std::shared_ptr<T> t, std::weak_ptr<Tree_Node> N)
 	{
-		if (N)
+		if (auto locked = N.lock())
 		{
-			if (N.get()->internal_node())
+			if (locked->internal_node())
 			{
-				insert_in_routing_object(t, boost::get<std::array<Routing_Object, capacity>>(N.get()->data));
+				insert_in_routing_object(t, boost::get<std::array<Routing_Object, capacity>>(locked->data));
 			}
-			else if (N.get()->leaf_node())
+			else if (locked->leaf_node())
 			{
-				insert_in_leaf_object(t, boost::get<Leaf_Object>(N.get()->data));
+				insert_in_leaf_object(t, locked);
 			}
 		}
 	}
@@ -179,41 +179,41 @@ namespace mt
 		//Will numeric limits work with all arithmetic types?
 		std::array<R, capacity> dists;
 		std::fill(std::begin(dists), std::end(dists), std::numeric_limits<R>::max());
-		for (int i = 0; i < r.size(); i++)
+		for (size_t i = 0; i < r.size(); i++)
 		{
-			if (false == r[i].obj)
-				continue;
-			
-			R object_distance = d(t, *r[i].obj);
-			if (object_distance <= r[i].cover_radius)
-				dists[i] = object_distance;
+			if (auto locked =r[i].obj.lock())
+			{
+				R object_distance = d(*t, *locked);
+				if (object_distance <= r[i].cover_radius)
+					dists[i] = object_distance;
+			}
 		}
 		auto min_elem = std::min_element(std::begin(dists), std::end(dists));
 		if (*min_elem == std::numeric_limits<R>::max())
 		{
-			for (int i = 0; i < r.size(); i++)
+			for (size_t i = 0; i < r.size(); i++)
 			{
-				if (false == r[i].obj)
-					continue;
+				if (auto locked = r[i].obj.lock())
+				{
 
-				dists[i] = d(t, *r[i].obj) - r[i].cover_radius;
+					dists[i] = d(*t, *locked) - r[i].cover_radius;
+				}
 			}
 			min_elem = std::min_element(std::begin(dists), std::end(dists));
-			r[std::distance(std::begin(dists), min_elem)].cover_radius = *min_elem
+			r[std::distance(std::begin(dists), min_elem)].cover_radius = *min_elem;
 		}
-		insert(t, r.children[std::distance(std::begin(dists), min_elem)]);
+//		insert(t, r[std::distance(std::begin(dists), min_elem)]);
 	}
 
 
 
 	template<class T, size_t capacity, class R>
-	void M_Tree<T, capacity, R>::insert_in_leaf_object(std::shared_ptr<T> t, std::weak_ptr<Tree_Node> n)
+	void M_Tree<T, capacity, R>::insert_in_leaf_object(std::shared_ptr<T> t, std::shared_ptr<Tree_Node> n)
 	{
-		static_assert(l.lock().get()->->leaf_node(),
-			"Routing object inputted into insert_in_leaf_object!");
+		assert(n->leaf_node());
 
-		Leaf_Object& l = boost::get<Leaf_Object>(n.lock().get()->data);
-		for (int i = 0; i < l.values.size(); i++)
+		Leaf_Object& l = boost::get<Leaf_Object>(n->data);
+		for (size_t i = 0; i < l.values.size(); i++)
 		{
 			if (false == l.values[i])
 			{
@@ -227,11 +227,8 @@ namespace mt
 	template<class T, size_t capacity, class R>
 	void M_Tree<T, capacity, R>::split(std::shared_ptr<T>t, std::weak_ptr<Tree_Node> N)
 	{
-		if (false == N)
-		{
-			return; // no node
-		}
 		auto locked = N.lock();
+
 		if (false == locked)
 			return;
 
@@ -241,25 +238,27 @@ namespace mt
 		{
 			split_node = locked->parent;
 		}
-		std::vector<std::weak_ptr<T>> n_set;
+		std::vector<std::weak_ptr<T>> n_set = { t };
+
 		if (locked->internal_node())
 		{
-			auto t = boost::get<std::array<Routing_Object, capacity>>(locked->data);
+			auto temp = boost::get<std::array<Routing_Object, capacity>>(locked->data);
 			for (int i = 0; i < capacity; i++)
 			{
-				if (t[i].obj)
-					n_set.push_back(t[i].obj);
+				auto temp_shared = temp[i].obj.lock();
+				if (temp_shared)
+					n_set.push_back(temp_shared);
 			}
 		}
 		else
 		{
-			auto t = boost::get<Leaf_Object>(locked->data);
+			auto ns = boost::get<Leaf_Object>(locked->data);
 			for (int i = 0; i < capacity; i++)
 			{
 				std::weak_ptr<T> temp;
-				if (t.children[i])
+				if (ns.values[i])
 				{
-					temp = t.children[i];
+					temp = ns.values[i];
 					n_set.push_back(temp);
 				}
 			}
@@ -270,8 +269,12 @@ namespace mt
 		partition(n_set, ro1, ro2);
 		if (is_root)
 		{
-			//create a new node and set it as the new root and
-			//store the new routing objects
+			std::shared_ptr<Tree_Node> new_parent = std::make_shared<Tree_Node>();
+			std::array<Routing_Object, capacity> temp_array;
+			temp_array[0] = ro1;
+			temp_array[1] = ro2;
+			new_parent->data = std::ref(temp_array);
+			root = new_parent;
 		}
 		else
 		{
@@ -292,7 +295,7 @@ namespace mt
 	}
 
 	template<class T, size_t capacity, class R>
-	void M_Tree<T, capacity, R>::partition(std::vector<std::weak_ptr<T>> o, Tree_Node& n1, Tree_Node& n2)
+	void M_Tree<T, capacity, R>::partition(std::vector<std::weak_ptr<T>> o, Routing_Object& n1, Routing_Object& n2)
 	{
 
 	}
