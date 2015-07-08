@@ -7,6 +7,7 @@
 #include <vector>
 #include <array>
 #include <algorithm>
+#include <random>
 #include "boost\variant\variant.hpp"
 #include "boost\variant\get.hpp"
 
@@ -46,6 +47,12 @@ namespace mt
 		struct Leaf_Object;
 		friend std::array<Routing_Object, capacity>;
 
+		/*
+			Routing object for the m-tree
+			obj represents the object at the centre of this routing object
+			children the tree nodes it points to and cover_radius the radius of the sphere
+			that envelopes it
+		*/
 		struct Routing_Object
 		{
 			Routing_Object(){}
@@ -55,7 +62,10 @@ namespace mt
 			std::array<std::shared_ptr<Tree_Node>, capacity-1> children;
 			R cover_radius;
 		};
-
+		/*
+			Leaf object for the leaves of the m-tree
+			values is an array of the values contained in this leaf
+		*/
 		struct Leaf_Object
 		{
 			Leaf_Object(){}
@@ -64,15 +74,23 @@ namespace mt
 			//std::vector<std::unique_ptr<T>> values;
 		};
 
+		/*
+			Tree node in the tree
+			Parent represents the object representing the parent node and dist_parent the distance 
+			between this nodes object and the parent nodes object
+			data is a variant that refers to the data the node stores, either leaf node data
+			or a set of routing objects
+		*/
 		struct Tree_Node
 		{
-			Tree_Node() :dist_parent(0),data(Leaf_Object()){}
 			Tree_Node(R distance) :dist_parent(distance), data(std::array<Routing_Object, capacity>()){}
 			std::weak_ptr<Tree_Node> parent;
 			boost::variant<std::array<Routing_Object, capacity>, Leaf_Object> data;
 			//	boost::variant<std::vector<Routing_Object>, Leaf_Object> data;
 			R dist_parent;
 
+			Tree_Node() :dist_parent(0),data(Leaf_Object())
+			{}
 			const bool leaf_node()
 			{
 				return data.type() == typeid(Leaf_Object);
@@ -263,7 +281,6 @@ namespace mt
 				}
 			}
 		}
-		Tree_Node new_node(0);
 		Routing_Object ro1, ro2;
 		promote(n_set, ro1, ro2);
 		partition(n_set, ro1, ro2);
@@ -278,20 +295,57 @@ namespace mt
 		}
 		else
 		{
-			/* Now use the parent routing object to store
-			one of the new objects
-			
-			The second routing object is stored in the parent 
-			only if it has free capacity else the level above needs 
-			splitting!
-			*/
+			if (auto temp_lock = split_node.lock())
+			{
+				auto ros = boost::get<std::array<Routing_Object, capacity>>(temp_lock->data);
+				bool at_capacity = true;
+				size_t last_index;
+				for (size_t i = 0; i < capacity; i++)
+				{
+					auto it = std::find(std::begin(n_set), std::end(n_set), ros.obj);
+					if (it != std::end(n_set))
+					{
+						ros[i] = ro1;
+						if (i < capacity - 1)
+						{
+							at_capacity = false;
+							last_index = i + 1;
+							break;
+						}
+					}
+				}
+				if (at_capacity)
+				{
+					std::shared_ptr<Tree_Node> node = std::make_shared<Tree_Node>(0);
+					std::array<Routing_Object, capacity> temp_array;
+					temp_array[0] = ro2;
+					node->data = std::ref(temp_array);
+					split(temp_lock, node);
+				}
+				else
+				{
+					ros[last_index] = ro2;
+				}
+			}
 		}
 	}
 
+	/*
+		Currently just implements random distribution. 
+	*/
 	template<class T, size_t capacity, class R>
 	void M_Tree<T, capacity, R>::promote(std::vector<std::weak_ptr<T>> n, Routing_Object& o1, Routing_Object& o2)
 	{
-
+		std::default_random_engine generator;
+		std::uniform_int_distribution<int> distribution(0, n.size() - 1);
+		int index_1 = distribution(generator);
+		o1.obj = n[index_1];
+		int index_2 = distribution(generator);
+		while (index_2 != index1)
+		{
+			index_2 = distribution(generator);
+		}
+		o2.obj = n[index_2];
 	}
 
 	template<class T, size_t capacity, class R>
