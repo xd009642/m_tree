@@ -67,6 +67,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="mtree.h" />
+    <ClInclude Include="sandbox.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />

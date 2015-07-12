@@ -8,6 +8,7 @@
 #include <array>
 #include <algorithm>
 #include <random>
+#include <map>
 #include "boost\variant\variant.hpp"
 #include "boost\variant\get.hpp"
 
@@ -30,7 +31,7 @@ namespace mt
     {
         MIN_RAD, MIN_MAXRAD, M_LB_DIST, RANDOM, SAMPLING
     };
-
+    
     /*
         An M-Tree is a tree that partions elements in metric space so as to minimise the distance between them.
 
@@ -168,12 +169,25 @@ namespace mt
         void split(ID id, std::weak_ptr<T> t, std::weak_ptr<tree_node> n);
         void promote(std::vector<std::weak_ptr<T>> n, routing_object& o1, routing_object& o2);
         void partition(std::vector<std::weak_ptr<T>> o, routing_object& n1, routing_object& n2);
+
+        //split policy functions
+        void minimise_radius(std::vector<std::weak_ptr<T>> t, std::weak_ptr<T> o1, std::weak_ptr<T> o2);
+        void minimise_max_radius(std::vector<std::weak_ptr<T>> t, std::weak_ptr<T> o1, std::weak_ptr<T> o2);
+        void maximise_distance_lower_bound(std::vector<std::weak_ptr<T>> t, std::weak_ptr<T> o1, std::weak_ptr<T> o2);
+        void random(std::vector<std::weak_ptr<T>> t, std::weak_ptr<T> o1, std::weak_ptr<T> o2);
+        void sampling(std::vector<std::weak_ptr<T>> t, std::weak_ptr<T> o1, std::weak_ptr<T> o2);
     private:
         std::function<R(const T&, const T&)> d;
         std::shared_ptr<tree_node> root;
+        std::map<split_policy, std::function<void(std::vector<std::weak_ptr<T>>, std::weak_ptr<T>, std::weak_ptr<T>)>> split_functions;
+        // std::map<split_policy, std::function<(vector then two routing objects, bit of a hassle)> 
+        //and really use two of these for promote and partition!?
         split_policy policy;
     };
 	
+
+
+
     template < class T, size_t C, typename R, typename ID>
     M_Tree<T, C, R, ID>::M_Tree(std::function<R(const T&, const T&)> distanceFunction):
         d(distanceFunction),
@@ -182,6 +196,9 @@ namespace mt
         static_assert(std::is_arithmetic<R>::value, "distance function must return arithmetic type");
 		static_assert(C > 1, "Node capacity must be >1");
 		root = std::make_shared<tree_node>();
+
+        using namespace std::placeholders;
+        split_functions[split_policy::MIN_MAXRAD] = std::bind(&M_Tree<T, C, R, ID>::random, this, _1, _2, _3);
 	}
 
 
@@ -353,25 +370,25 @@ namespace mt
     template < class T, size_t C, typename R, typename ID>
     void M_Tree<T, C, R, ID>::partition(std::vector<std::weak_ptr<T>> o, routing_object& n1, routing_object& n2)
     {
+        
+        
+    }
+
+
+    template < class T, size_t C, typename R, typename ID>
+    void M_Tree<T, C, R, ID>::random(std::vector<std::weak_ptr<T>> t, std::weak_ptr<T> o1, std::weak_ptr<T> o2)
+    {
         std::default_random_engine generator;
-        std::uniform_int_distribution<int> distribution(0, 1);
-        int n1_index = 0, n2_index = 0;
-        /*for (std::weak_ptr<T>& t : o)
+        std::uniform_int_distribution<int> distribution(0, t.size() - 1);
+        int n1_index = distribution(generator);
+        int n2_index = distribution(generator);
+        while (n1_index == n2_index)
         {
-            if (t != n1.value && t != n2.value)
-            {
-                if (distribution(generator) && (n1_index < capacity-1))
-                {
-                    n1.children[n1_index] = t;
-                    n1_index++;
-                }
-                else if (n2_index < capacity - 1)
-                {
-                    n2.children[n2_index] = t;
-                    n2_index++;
-                }
-            }
-        }*/
+            n2_index = distribution(generator);
+        }
+
+        o1 = t[n1_index];
+        o2 = t[n2_index];
     }
 }
 
