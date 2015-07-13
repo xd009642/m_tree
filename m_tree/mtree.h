@@ -32,6 +32,10 @@ namespace mt
         MIN_RAD, MIN_MAXRAD, M_LB_DIST, RANDOM, SAMPLING
     };
     
+    enum class partition_algorithm
+    {
+        BALANCED, GEN_HYPERPLANE
+    };
     /*
         An M-Tree is a tree that partions elements in metric space so as to minimise the distance between them.
 
@@ -183,6 +187,7 @@ namespace mt
         // std::map<split_policy, std::function<(vector then two routing objects, bit of a hassle)> 
         //and really use two of these for promote and partition!?
         split_policy policy;
+        partition_algorithm partition_method;
     };
 	
 
@@ -191,7 +196,8 @@ namespace mt
     template < class T, size_t C, typename R, typename ID>
     M_Tree<T, C, R, ID>::M_Tree(std::function<R(const T&, const T&)> distanceFunction):
         d(distanceFunction),
-        policy(split_policy::M_LB_DIST)
+        policy(split_policy::M_LB_DIST),
+        partition_method(partition_algorithm::BALANCED)
     {
         static_assert(std::is_arithmetic<R>::value, "distance function must return arithmetic type");
 		static_assert(C > 1, "Node capacity must be >1");
@@ -199,6 +205,7 @@ namespace mt
 
         using namespace std::placeholders;
         split_functions[split_policy::MIN_MAXRAD] = std::bind(&M_Tree<T, C, R, ID>::random, this, _1, _2, _3);
+        split_functions[split_policy::M_LB_DIST] = std::bind(&M_Tree<T, C, R, ID>::maximise_distance_lower_bound, this, _1, _2, _3);
 	}
 
 
@@ -370,8 +377,26 @@ namespace mt
     template < class T, size_t C, typename R, typename ID>
     void M_Tree<T, C, R, ID>::partition(std::vector<std::weak_ptr<T>> o, routing_object& n1, routing_object& n2)
     {
-        
-        
+        if (partition_method == partition_algorithm::BALANCED)
+        {
+
+        }
+        else
+        {
+
+        }
+    }
+
+    template < class T, size_t C, typename R, typename ID>
+    void M_Tree<T, C, R, ID>::minimise_radius(std::vector<std::weak_ptr<T>> t, std::weak_ptr<T> o1, std::weak_ptr<T> o2)
+    {
+
+    }
+
+    template < class T, size_t C, typename R, typename ID>
+    void M_Tree<T, C, R, ID>::minimise_max_radius(std::vector<std::weak_ptr<T>> t, std::weak_ptr<T> o1, std::weak_ptr<T> o2)
+    {
+
     }
 
     template < class T, size_t C, typename R, typename ID>
@@ -414,6 +439,13 @@ namespace mt
 
         o1 = t[n1_index];
         o2 = t[n2_index];
+    }
+
+
+    template < class T, size_t C, typename R, typename ID>
+    void M_Tree<T, C, R, ID>::sampling(std::vector<std::weak_ptr<T>> t, std::weak_ptr<T> o1, std::weak_ptr<T> o2)
+    {
+
     }
 }
 
