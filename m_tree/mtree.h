@@ -13,7 +13,7 @@
 #include "boost\variant\get.hpp"
 
 namespace mt
-{
+{        
     /*
         Taken from "M-tree: An Efficient Access Method for Similarity Search in Metric Spaces"
         (P. Ciaccia, M. Patella, P. Zezula). Defines the method used when splitting a leaf node up 
@@ -54,7 +54,7 @@ namespace mt
     class M_Tree
     {
         ////////////////////////////////////////////////////////////////////////////
-        ////			Typedefs and internal structure definitions				////
+        ////            Typedefs and internal structure definitions             ////
         ////////////////////////////////////////////////////////////////////////////
         struct tree_node;
         struct routing_object;
@@ -65,6 +65,7 @@ namespace mt
 
         typedef std::array<leaf_object, C> leaf_set;
         typedef std::array<routing_object, C> route_set;
+        typedef std::function<R(const T&, const T&)> distance_function;
 
         /*
         * gets the list of reference objects in the node for routing or leaf objects
@@ -140,10 +141,10 @@ namespace mt
 
     public:
         //Constructors and destructors 
-        M_Tree(std::function<R(const T&, const T&)> distanceFunction = std::function<R(const T&, const T&)>());
+        M_Tree(distance_function dist_func = distance_function());
         ~M_Tree();
 
-        void setDistanceFunction(std::function<R(const T&, const T&)> distanceFunction);
+        void set_distance_function(distance_function dist_func);
 
         size_t size() const;
         bool empty() const;
@@ -180,12 +181,12 @@ namespace mt
         void maximise_distance_lower_bound(std::vector<std::weak_ptr<T>> t, std::weak_ptr<T> o1, std::weak_ptr<T> o2);
         void random(std::vector<std::weak_ptr<T>> t, std::weak_ptr<T> o1, std::weak_ptr<T> o2);
         void sampling(std::vector<std::weak_ptr<T>> t, std::weak_ptr<T> o1, std::weak_ptr<T> o2);
+
+        void calculate_distance_matrix(const std::vector<std::weak_ptr<T>>& n, std::vector<R>& dst);
     private:
         std::function<R(const T&, const T&)> d;
         std::shared_ptr<tree_node> root;
         std::map<split_policy, std::function<void(std::vector<std::weak_ptr<T>>, std::weak_ptr<T>, std::weak_ptr<T>)>> split_functions;
-        // std::map<split_policy, std::function<(vector then two routing objects, bit of a hassle)> 
-        //and really use two of these for promote and partition!?
         split_policy policy;
         partition_algorithm partition_method;
     };
@@ -194,19 +195,19 @@ namespace mt
 
 
     template < class T, size_t C, typename R, typename ID>
-    M_Tree<T, C, R, ID>::M_Tree(std::function<R(const T&, const T&)> distanceFunction):
-        d(distanceFunction),
+    M_Tree<T, C, R, ID>::M_Tree(distance_function dist_func) :
+        d(dist_func),
         policy(split_policy::M_LB_DIST),
         partition_method(partition_algorithm::BALANCED)
     {
         static_assert(std::is_arithmetic<R>::value, "distance function must return arithmetic type");
-		static_assert(C > 1, "Node capacity must be >1");
-		root = std::make_shared<tree_node>();
+        static_assert(C > 1, "Node capacity must be >1");
+        root = std::make_shared<tree_node>();
 
         using namespace std::placeholders;
         split_functions[split_policy::MIN_MAXRAD] = std::bind(&M_Tree<T, C, R, ID>::random, this, _1, _2, _3);
         split_functions[split_policy::M_LB_DIST] = std::bind(&M_Tree<T, C, R, ID>::maximise_distance_lower_bound, this, _1, _2, _3);
-	}
+    }
 
 
     template < class T, size_t C, typename R, typename ID>
@@ -216,9 +217,9 @@ namespace mt
     }
 
     template < class T, size_t C, typename R, typename ID>
-    void M_Tree<T, C, R, ID>::setDistanceFunction(std::function<R(const T&, const T&)> distanceFunction)
+    void M_Tree<T, C, R, ID>::set_distance_function(distance_function dist_func)
     {
-        d = distanceFunction;
+        d = dist_func;
     }
 
     template < class T, size_t C, typename R, typename ID>
@@ -362,16 +363,12 @@ namespace mt
     template < class T, size_t C, typename R, typename ID>
     void M_Tree<T, C, R, ID>::promote(std::vector<std::weak_ptr<T>> n, routing_object& o1, routing_object& o2)
     {
-        std::default_random_engine generator;
-        std::uniform_int_distribution<int> distribution(0, n.size() - 1);
-        int index_1 = distribution(generator);
-        o1.value = n[index_1];
-        int index_2 = distribution(generator);
-        while (index_2 != index_1)
+        auto fn = split_functions.find(policy);
+        if (fn != split_functions.end())
         {
-            index_2 = distribution(generator);
+            //call promote function here.
+            //   fn(n, o1, o2);
         }
-        o2.value = n[index_2];
     }
 
     template < class T, size_t C, typename R, typename ID>
@@ -403,11 +400,11 @@ namespace mt
     void M_Tree<T, C, R, ID>::maximise_distance_lower_bound(std::vector<std::weak_ptr<T>> t, std::weak_ptr<T> o1, std::weak_ptr<T> o2)
     {
         double max_distance = 0.0;
-        for (int i = 0; i < t.size(); i++)
+        for (size_t i = 0; i < t.size(); i++)
         {
             if (auto lock_1 = t[i].lock())
             {
-                for (int j = 0; j < t.size(); j++)
+                for (size_t j = 0; j < t.size(); j++)
                 {
                     if (auto lock_2 = t[j].lock())
                     {
@@ -447,6 +444,32 @@ namespace mt
     {
 
     }
+    /*
+        index done by width*row + column
+    */
+    template < class T, size_t C, typename R, typename ID>
+    void M_Tree<T, C, R, ID>::calculate_distance_matrix(const std::vector<std::weak_ptr<T>>& n, std::vector<R>& dst)
+    {
+        dst.resize(n.size() * n.size());
+        for (int i = 0; i < n.size(); i++)
+        {
+            if (auto lock_1 = n[i].lock())
+            {
+                for (int j = 0; j < n.size(); j++)
+                {
+                    if (j == i)
+                    {
+                        dst[n.size()*i + j] = 0;
+                    }
+                    else if (lock_2 = n[j].lock())
+                    {
+                        dst[n.size()*i + j] = d(*lock_1, *lock_2);
+                    }
+                }
+            }
+        }
+    }
+    
 }
 
 
