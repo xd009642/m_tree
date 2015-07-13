@@ -374,6 +374,31 @@ namespace mt
         
     }
 
+    template < class T, size_t C, typename R, typename ID>
+    void M_Tree<T, C, R, ID>::maximise_distance_lower_bound(std::vector<std::weak_ptr<T>> t, std::weak_ptr<T> o1, std::weak_ptr<T> o2)
+    {
+        double max_distance = 0.0;
+        for (int i = 0; i < t.size(); i++)
+        {
+            if (auto lock_1 = t[i].lock())
+            {
+                for (int j = 0; j < t.size(); j++)
+                {
+                    if (auto lock_2 = t[j].lock())
+                    {
+                        double distance = d(*lock_1, *lock_2);
+                        if (distance > max_distance)
+                        {
+                            max_distance = distance;
+                            o1 = lock_1;
+                            o2 = lock_2;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 
     template < class T, size_t C, typename R, typename ID>
     void M_Tree<T, C, R, ID>::random(std::vector<std::weak_ptr<T>> t, std::weak_ptr<T> o1, std::weak_ptr<T> o2)
