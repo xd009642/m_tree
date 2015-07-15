@@ -166,6 +166,7 @@ namespace mt
         //range and nearest neighbour searches
         std::vector<T> range_query(const T& ref, R range);
         std::vector<T> knn_query(const T& ref, int k);
+
     protected:
         //insert functions, used to break up functionality or abstract away the implementation
         void insert(ID id, std::weak_ptr<T> t, std::weak_ptr<tree_node> node);
@@ -174,7 +175,6 @@ namespace mt
 
         void split(ID id, std::weak_ptr<T> t, std::weak_ptr<tree_node> n);
         void promote(std::vector<std::weak_ptr<T>> n, routing_object& o1, routing_object& o2);
-        void partition(std::vector<std::weak_ptr<T>> o, routing_object& n1, routing_object& n2, std::vector<R> distances=std::vector<R>());
 
         //split policy functions
         void minimise_radius(std::vector<std::weak_ptr<T>> t, routing_object& o1, routing_object& o2);
@@ -183,7 +183,13 @@ namespace mt
         void random(std::vector<std::weak_ptr<T>> t, routing_object& o1, routing_object& o2);
         void sampling(std::vector<std::weak_ptr<T>> t, routing_object& o1, routing_object& o2);
 
+        //partition functions
+        void partition(std::vector<std::weak_ptr<T>> o, routing_object& n1, routing_object& n2, std::vector<R> distances=std::vector<R>());
+        void balanced_partition(std::vector<std::pair<ID, std::weak_ptr<T>>> o, std::vector<R> distances, routing_object& n1, routing_object& n2);
+        void generalised_partition(std::vector<std::weak_ptr<T>> o, std::vector<R> distances, routing_object& n1, routing_object& n2);
+
         void calculate_distance_matrix(const std::vector<std::weak_ptr<T>>& n, std::vector<R>& dst);
+
     private:
         std::function<R(const T&, const T&)> d;
         std::shared_ptr<tree_node> root;
@@ -384,9 +390,50 @@ namespace mt
         {
 
         }
-        else
+        else if (partition_method == partition_algorithm::GEN_HYPERPLANE)
         {
 
+        }
+    }
+
+    template < class T, size_t C, typename R, typename ID>
+    void M_Tree<T, C, R, ID>::balanced_partition(std::vector<std::pair<ID, std::weak_ptr<T>>> o, std::vector<R> distances, routing_object& n1, routing_object& n2)
+    {
+        using namespace std::placeholders;
+        BOOST_ASSERT_MSG(distances.size() = o.size()*o.size(), "NOT ENOUGH DISTANCES");
+
+        auto if_routing = [](std::pair<ID, std::weak_ptr<T>> x, std::weak_ptr<T> y){
+            return x.second == y; 
+        };
+        auto sort_pred = [](const std::pair<ID, R>& a, const std::pair<ID, R>& b){
+            a.second < b.second;   
+        };
+        auto remove_id = []((const std::pair<ID, R>& a, ID id){
+            return a.first == id;
+        };
+
+        int n1_index = std::distance(std::begin(o), std::find_if(std::begin(o), std::end(o), std::bind(if_routing, _1, n1.value)));
+        int n2_index = std::distance(std::begin(o), std::find_if(std::begin(o), std::end(o), std::bind(if_routing, _1, n2.value)));
+
+        BOOST_ASSERT_MSG(n1_index != n2_index, "PROMOTE FUNCTION CHOSE THE SAME OBJECTS");
+
+        std::vector<std::pair<ID, R>> d1, d2;
+        d1.resize(o.size());
+        d2.resize(o.size());
+
+        for (int i = 0; i < o.size(); i++)
+        {
+            d1[i] = std::make_pair(o[i].first, distances[o.size()*n1_index + i]);
+            d2[i] = std::make_pair(o[i].first, distances[o.size()*n2_index + i]);
+        }
+        std::sort(std::begin(d1), std::end(d1), sort_pred);
+        std::sort(std::begin(d2), std::end(d2), sort_pred);
+        for (int i = 0; i < o.size(); i++)
+        {
+            //Here we create the Tree nodes containing leaf sets and partition the objects into the leaves
+            //update the distances and covering radii and ensure that each object is only assigned to one leaf
+            //
+            //Use the remove_id function to remove an object from d1 and d2 once it has been allocated
         }
     }
 
