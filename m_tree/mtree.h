@@ -136,7 +136,7 @@ namespace mt
         {
             std::shared_ptr<T> value;
             ID id;
-            double distance;
+            R distance;
         };
 
 
@@ -388,7 +388,7 @@ namespace mt
         }
         if (partition_method == partition_algorithm::BALANCED)
         {
-
+            balanced_partition(std::vector<std::pair<ID, std::weak_ptr<T>>>(), distances, n1, n2);
         }
         else if (partition_method == partition_algorithm::GEN_HYPERPLANE)
         {
@@ -397,44 +397,73 @@ namespace mt
     }
 
     template < class T, size_t C, typename R, typename ID>
-    void M_Tree<T, C, R, ID>::balanced_partition(std::vector<std::pair<ID, std::weak_ptr<T>>> o, std::vector<R> distances, routing_object& n1, routing_object& n2)
+    void M_Tree<T, C, R, ID>::balanced_partition(std::vector<std::pair<ID, std::weak_ptr<T>>> o, 
+                                                 std::vector<R> distances, routing_object& n1, routing_object& n2)
     {
         using namespace std::placeholders;
-        BOOST_ASSERT_MSG(distances.size() = o.size()*o.size(), "NOT ENOUGH DISTANCES");
+        BOOST_ASSERT_MSG(distances.size() == o.size()*o.size(), "NOT ENOUGH DISTANCES");
 
         auto if_routing = [](std::pair<ID, std::weak_ptr<T>> x, std::weak_ptr<T> y){
-            return x.second == y; 
+            return x.second.lock() == y.lock();
+        };
+        auto if_id_equals = [](std::pair<ID, std::weak_ptr<T>> x, ID y){
+            return x.first == y;
         };
         auto sort_pred = [](const std::pair<ID, R>& a, const std::pair<ID, R>& b){
-            a.second < b.second;   
+            return a.second < b.second;   
         };
-        auto remove_id = []((const std::pair<ID, R>& a, ID id){
+        auto remove_id = [](const std::pair<ID, R>& a, ID id){
             return a.first == id;
         };
+        std::vector<std::pair<ID, R>> d1, d2;
+        d1.resize(o.size());
+        d2.resize(o.size());
 
         int n1_index = std::distance(std::begin(o), std::find_if(std::begin(o), std::end(o), std::bind(if_routing, _1, n1.value)));
         int n2_index = std::distance(std::begin(o), std::find_if(std::begin(o), std::end(o), std::bind(if_routing, _1, n2.value)));
 
         BOOST_ASSERT_MSG(n1_index != n2_index, "PROMOTE FUNCTION CHOSE THE SAME OBJECTS");
 
-        std::vector<std::pair<ID, R>> d1, d2;
-        d1.resize(o.size());
-        d2.resize(o.size());
-
-        for (int i = 0; i < o.size(); i++)
+        for (size_t i = 0; i < o.size(); i++)
         {
             d1[i] = std::make_pair(o[i].first, distances[o.size()*n1_index + i]);
             d2[i] = std::make_pair(o[i].first, distances[o.size()*n2_index + i]);
         }
         std::sort(std::begin(d1), std::end(d1), sort_pred);
         std::sort(std::begin(d2), std::end(d2), sort_pred);
-        for (int i = 0; i < o.size(); i++)
+        leaf_set set_1, set_2;
+        int x = 0, y = 0;
+        while ((false == d1.empty()) || (false == d2.empty()))
         {
-            //Here we create the Tree nodes containing leaf sets and partition the objects into the leaves
-            //update the distances and covering radii and ensure that each object is only assigned to one leaf
-            //
-            //Use the remove_id function to remove an object from d1 and d2 once it has been allocated
+            if (false == d1.empty() && x < C)
+            {
+                if (n1.covering_radius < d1[0].second)
+                    n1.covering_radius = d1[0].second;
+
+                set_1[x].distance = d1[0].second;
+                set_1[x].id = d1[0].first;
+                set_1[x].value = std::find_if(std::begin(o), std::end(o), std::bind(if_id_equals, _1, d1[0].first))->second.lock();
+                std::remove_if(std::begin(d1), std::end(d1), std::bind(remove_id, _1, d1[0].first));
+                std::remove_if(std::begin(d2), std::end(d2), std::bind(remove_id, _1, d1[0].first));
+                x++;
+            }
+            if(false == d2.empty() && y<C)
+            {
+                if (n2.covering_radius < d2[0].second)
+                    n2.covering_radius = d2[0].second;
+
+                set_2[x].distance = d2[0].second;
+                set_2[x].id = d2[0].first;
+                set_2[x].value = std::find_if(std::begin(o), std::end(o), std::bind(if_id_equals, _1, d2[0].first))->second.lock();
+                std::remove_if(std::begin(d1), std::end(d1), std::bind(remove_id, _1, d2[0].first));
+                std::remove_if(std::begin(d2), std::end(d2), std::bind(remove_id, _1, d2[0].first));
+                y++;
+            }
         }
+        n1.covering_tree = std::make_shared<tree_node>();
+        n1.covering_tree->data = set_1;
+        n2.covering_tree = std::make_shared<tree_node>();
+        n2.covering_tree->data = set_2;
     }
 
     template < class T, size_t C, typename R, typename ID>
