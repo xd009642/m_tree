@@ -195,9 +195,12 @@ namespace mt
                     std::cout << "| ";
                     for (size_t i = 0; i < ro_array.size(); i++)
                     {
-                        std::cout << ro_array[i].value.lock() << ", ";
-                        if (ro_array[i].covering_tree)
-                            queue.push_back(ro_array[i].covering_tree);
+                        if (auto lock = ro_array[i].value.lock())
+                        {
+                            std::cout << *lock<< ", ";
+                            if (ro_array[i].covering_tree)
+                                queue.push_back(ro_array[i].covering_tree);
+                        }
                     }
                     std::cout << "| " << std::endl;
                 }
@@ -523,6 +526,8 @@ namespace mt
         n2.covering_tree->data = set_2;
     }
 
+
+
     template < class T, size_t C, typename R, typename ID>
     void M_Tree<T, C, R, ID>::minimise_radius(std::vector<std::pair<ID, std::weak_ptr<T>>> t, routing_object& o1, routing_object& o2)
     {
@@ -558,6 +563,8 @@ namespace mt
         o1 = best.first;
         o2 = best.second;
     }
+
+
 
     template < class T, size_t C, typename R, typename ID>
     void M_Tree<T, C, R, ID>::minimise_max_radius(std::vector<std::pair<ID, std::weak_ptr<T>>> t, routing_object& o1, routing_object& o2)
@@ -595,6 +602,8 @@ namespace mt
         o2 = best.second;
     }
 
+
+
     template < class T, size_t C, typename R, typename ID>
     void M_Tree<T, C, R, ID>::maximise_distance_lower_bound(std::vector<std::pair<ID, std::weak_ptr<T>>> t, routing_object& o1, routing_object& o2)
     {
@@ -611,6 +620,8 @@ namespace mt
                         if (distance > max_distance)
                         {
                             max_distance = distance;
+                            o1.id = t[i].first;
+                            o2.id = t[j].first;
                             o1.value = lock_1;
                             o2.value = lock_2;
                         }
