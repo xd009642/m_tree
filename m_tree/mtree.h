@@ -168,6 +168,53 @@ namespace mt
         std::vector<T> range_query(const T& ref, R range);
         std::vector<T> knn_query(const T& ref, int k);
 
+        //Here for debugging purposes
+        void print()
+        {
+            /* procedure BFS(G,v) is
+            2      let Q be a queue
+            3      Q.enqueue(v)
+            4      label v as discovered
+            5      while Q is not empty
+            6         v =Q.dequeue()
+            7         process(v)
+            8         for all edges from v to w in G.adjacentEdges(v) do
+            9             if w is not labeled as discovered
+            10                Q.enqueue(w)
+            11                label w as discovered*/
+            std::vector<std::weak_ptr<tree_node>> queue;
+            if (root)
+                queue.push_back(root);
+            while (false == queue.empty())
+            {
+                std::shared_ptr<tree_node> current= queue.front().lock();
+                queue.erase(queue.begin());
+                if (current->internal_node())
+                {
+                    route_set ro_array = boost::get<route_set>(current->data);
+                    std::cout << "| ";
+                    for (size_t i = 0; i < ro_array.size(); i++)
+                    {
+                        std::cout << ro_array[i].value.lock() << ", ";
+                        if (ro_array[i].covering_tree)
+                            queue.push_back(ro_array[i].covering_tree);
+                    }
+                    std::cout << "| " << std::endl;
+                }
+                else if (current->leaf_node())
+                {
+                    leaf_set ro_array = boost::get<leaf_set>(current->data);
+                    std::cout << "| ";
+                    for (size_t i = 0; i < ro_array.size(); i++)
+                    {
+                        if (ro_array[i].value)
+                            std::cout << *ro_array[i].value << ", ";
+                    }
+                    std::cout << "| " << std::endl;
+                }
+            }
+        }
+
     protected:
         //insert functions, used to break up functionality or abstract away the implementation
         void insert(ID id, std::weak_ptr<T> t, std::weak_ptr<tree_node> node);
@@ -300,7 +347,7 @@ namespace mt
         {
             BOOST_ASSERT_MSG(lock->leaf_node(), "internal node input into leaf_node_insert");
 
-            leaf_set ls = boost::get<leaf_set>(lock->data);
+            leaf_set& ls = boost::get<leaf_set>(lock->data);
             for (size_t i = 0; i < ls.size(); i++)
             {
                 if (false == ls[i].value)
@@ -334,6 +381,8 @@ namespace mt
             {
                 std::shared_ptr<tree_node> new_root = std::make_shared<tree_node>();
                 std::array<routing_object, C> temp_array;
+                o1.covering_tree->parent = new_root;
+                o2.covering_tree->parent = new_root;
                 temp_array[0] = o1;
                 temp_array[1] = o2;
                 new_root->data = std::ref(temp_array);
@@ -373,10 +422,11 @@ namespace mt
     void M_Tree<T, C, R, ID>::promote(std::vector<std::pair<ID, std::weak_ptr<T>>> n, routing_object& o1, routing_object& o2)
     {
         auto fn = split_functions.find(policy);
-        if (fn != split_functions.end())
+        maximise_distance_lower_bound(n, o1, o2);
+        /*if (fn != split_functions.end())
         {
             fn->second(n, o1, o2);
-        }
+        }*/
     }
 
     template < class T, size_t C, typename R, typename ID>
@@ -435,7 +485,7 @@ namespace mt
         std::sort(std::begin(d2), std::end(d2), sort_pred);
         leaf_set set_1, set_2;
         int x = 0, y = 0;
-        while ((false == d1.empty()) || (false == d2.empty()))
+        while ((false == d1.empty()) || (false == d2.empty()) && (x<C || y<C))
         {
             if (false == d1.empty() && x < C)
             {
@@ -445,8 +495,10 @@ namespace mt
                 set_1[x].distance = d1[0].second;
                 set_1[x].id = d1[0].first;
                 set_1[x].value = std::find_if(std::begin(o), std::end(o), std::bind(if_id_equals, _1, d1[0].first))->second.lock();
-                std::remove_if(std::begin(d1), std::end(d1), std::bind(remove_id, _1, d1[0].first));
-                std::remove_if(std::begin(d2), std::end(d2), std::bind(remove_id, _1, d1[0].first));
+                auto d1_end = std::remove_if(std::begin(d1), std::end(d1), std::bind(remove_id, _1, d1[0].first));
+                auto d2_end = std::remove_if(std::begin(d2), std::end(d2), std::bind(remove_id, _1, d1[0].first));
+                d1.erase(d1_end, std::end(d1));
+                d2.erase(d2_end, std::end(d2));
                 x++;
             }
             if(false == d2.empty() && y<C)
@@ -454,11 +506,14 @@ namespace mt
                 if (n2.covering_radius < d2[0].second)
                     n2.covering_radius = d2[0].second;
 
-                set_2[x].distance = d2[0].second;
-                set_2[x].id = d2[0].first;
-                set_2[x].value = std::find_if(std::begin(o), std::end(o), std::bind(if_id_equals, _1, d2[0].first))->second.lock();
-                std::remove_if(std::begin(d1), std::end(d1), std::bind(remove_id, _1, d2[0].first));
-                std::remove_if(std::begin(d2), std::end(d2), std::bind(remove_id, _1, d2[0].first));
+                set_2[y].distance = d2[0].second;
+                set_2[y].id = d2[0].first;
+                set_2[y].value = std::find_if(std::begin(o), std::end(o), std::bind(if_id_equals, _1, d2[0].first))->second.lock();
+                //removal
+                auto d1_end = std::remove_if(std::begin(d1), std::end(d1), std::bind(remove_id, _1, d2[0].first));
+                auto d2_end = std::remove_if(std::begin(d2), std::end(d2), std::bind(remove_id, _1, d2[0].first));
+                d1.erase(d1_end, std::end(d1));
+                d2.erase(d2_end, std::end(d2));
                 y++;
             }
         }
@@ -563,6 +618,7 @@ namespace mt
                 }
             }
         }
+        partition(t, o1, o2);
     }
 
 
