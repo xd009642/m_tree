@@ -171,17 +171,6 @@ namespace mt
         //Here for debugging purposes
         void print()
         {
-            /* procedure BFS(G,v) is
-            2      let Q be a queue
-            3      Q.enqueue(v)
-            4      label v as discovered
-            5      while Q is not empty
-            6         v =Q.dequeue()
-            7         process(v)
-            8         for all edges from v to w in G.adjacentEdges(v) do
-            9             if w is not labeled as discovered
-            10                Q.enqueue(w)
-            11                label w as discovered*/
             std::vector<std::weak_ptr<tree_node>> queue;
             if (root)
                 queue.push_back(root);
@@ -191,27 +180,35 @@ namespace mt
                 queue.erase(queue.begin());
                 if (current->internal_node())
                 {
-                    route_set ro_array = boost::get<route_set>(current->data);
+                    route_set& ro_array = boost::get<route_set>(current->data);
                     std::cout << "| ";
                     for (size_t i = 0; i < ro_array.size(); i++)
                     {
+                        if (i > 0)
+                            std::cout << ", ";
                         if (auto lock = ro_array[i].value.lock())
                         {
-                            std::cout << *lock<< ", ";
+                            std::cout << *lock;
                             if (ro_array[i].covering_tree)
                                 queue.push_back(ro_array[i].covering_tree);
                         }
+                        else
+                            std::cout << "_";
                     }
                     std::cout << "| " << std::endl;
                 }
                 else if (current->leaf_node())
                 {
-                    leaf_set ro_array = boost::get<leaf_set>(current->data);
+                    leaf_set& ro_array = boost::get<leaf_set>(current->data);
                     std::cout << "| ";
                     for (size_t i = 0; i < ro_array.size(); i++)
                     {
+                        if (i > 0)
+                            std::cout << ", ";
                         if (ro_array[i].value)
-                            std::cout << *ro_array[i].value << ", ";
+                            std::cout << *ro_array[i].value;
+                        else
+                            std::cout << "_";
                     }
                     std::cout << "| " << std::endl;
                 }
@@ -315,7 +312,7 @@ namespace mt
         {
             BOOST_ASSERT_MSG(lock->internal_node(), "leaf node input into internal_node_insert");
 
-            route_set rs = boost::get<route_set>(lock->data);
+            route_set& rs = boost::get<route_set>(lock->data);
             std::array<R, C> distances;
             std::fill(std::begin(distances), std::end(distances), std::numeric_limits<R>::max());
             if (auto t_locked = t.lock())
@@ -396,7 +393,7 @@ namespace mt
                 if (auto parent = nl->parent.lock())
                 {
                     bool split_again = true;
-                    route_set parent_ros = boost::get<route_set>(parent->data);
+                    route_set& parent_ros = boost::get<route_set>(parent->data);
                     for (size_t i = 0; i < parent_ros.size(); i++)
                     {
                         if (parent_ros[i].covering_tree == nl)
@@ -498,8 +495,8 @@ namespace mt
                 set_1[x].distance = d1[0].second;
                 set_1[x].id = d1[0].first;
                 set_1[x].value = std::find_if(std::begin(o), std::end(o), std::bind(if_id_equals, _1, d1[0].first))->second.lock();
-                auto d1_end = std::remove_if(std::begin(d1), std::end(d1), std::bind(remove_id, _1, d1[0].first));
                 auto d2_end = std::remove_if(std::begin(d2), std::end(d2), std::bind(remove_id, _1, d1[0].first));
+                auto d1_end = std::remove_if(std::begin(d1), std::end(d1), std::bind(remove_id, _1, d1[0].first));
                 d1.erase(d1_end, std::end(d1));
                 d2.erase(d2_end, std::end(d2));
                 x++;
