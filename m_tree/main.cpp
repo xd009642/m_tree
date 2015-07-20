@@ -17,7 +17,11 @@ int main()
 	mt::M_Tree<double, 3, double> tree = mt::M_Tree<double, 3, double>(l2_dist);
     for (size_t i = 0; i < 10; i++)
     {
-        tree.insert(i, std::make_shared<double>((double)(rand() %100) - 50));
+        if (i > 5)
+            i = i;
+        double temp = (double)(rand() % 100);
+        std::cout << "inserting " << temp << std::endl;
+        tree.insert(i, std::make_shared<double>(temp));
         tree.print();
         std::cout << "_______________________________________" << std::endl;
     }

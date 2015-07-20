@@ -399,10 +399,12 @@ namespace mt
                         if (parent_ros[i].covering_tree == nl)
                         {
                             parent_ros[i] = o1;
+                            o1.covering_tree->parent = parent;
                         }
                         else if (false == parent_ros[i].covering_tree)
                         {
                             parent_ros[i] = o2;
+                            o2.covering_tree->parent = parent;
                             split_again = false;
                         }
                     }
@@ -485,7 +487,7 @@ namespace mt
         std::sort(std::begin(d2), std::end(d2), sort_pred);
         leaf_set set_1, set_2;
         int x = 0, y = 0;
-        while ((false == d1.empty()) || (false == d2.empty()) && (x<C || y<C))
+        while ((false == d1.empty()) || (false == d2.empty()))
         {
             if (false == d1.empty() && x < C)
             {
