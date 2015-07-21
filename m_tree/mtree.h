@@ -68,6 +68,28 @@ namespace mt
         typedef std::function<R(const T&, const T&)> distance_function;
         typedef std::function<void(std::vector<std::pair<ID, std::weak_ptr<T>>>, routing_object& o1, routing_object& o2)> partition_function;
 
+        //Gets data entries in the form of an array of routing or leaf objects
+        struct get_data_entries :public boost::static_visitor<>
+        {
+            template<class S, class U>
+            void operator()(S t, U& data)
+            {
+                BOOST_ASSERT_MSG(true, "EXPECTED DIFFERENT TYPES");
+            }
+            template<class S>
+            void operator()(S t, S& data)
+            {
+                size_t start = 0;
+                while (data[start].value.use_count() > 0 && start<data.size())
+                    start++;
+                for (size_t i = 0; i < t.size(); i++)
+                {
+                    if (t[i].value.use_count()>0 && start + i < data.size())
+                        data[start+i] = t[i];
+                }
+            }
+        };
+
         /*
         * gets the list of reference objects in the node for routing or leaf objects
         */
