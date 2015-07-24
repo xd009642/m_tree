@@ -1,6 +1,5 @@
 #include <iostream>
 #include "mtree.h"
-//#include "sandbox.h"
 #include <cmath>
 #include <stdlib.h> //rand is good enough for tests
 
@@ -15,7 +14,7 @@ int main()
     
 	auto l2_dist = std::function<double(const double&, const double&)>(l2);
 
-	mt::M_Tree<double, 3, double> tree = mt::M_Tree<double, 3, double>(l2_dist);
+    mt::m_tree<double, 3> tree = mt::m_tree<double, 3>(std::function<double(const double&, const double&)>(l2));
     for (size_t i = 0; i < 10; i++)
     {
         if (i > 5)

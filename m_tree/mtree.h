@@ -51,7 +51,7 @@ namespace mt
             ID: type for the reference values ID
     */
     template < class T, size_t C = 3, typename R = double, typename ID = int >
-    class M_Tree
+    class m_tree
     {
         ////////////////////////////////////////////////////////////////////////////
         ////            Typedefs and internal structure definitions             ////
@@ -76,8 +76,8 @@ namespace mt
             {
                 BOOST_ASSERT_MSG(true, "EXPECTED DIFFERENT TYPES");
             }
-            template<class S>
-            void operator()(S t, S& data)
+            template<class S, size_t a, size_t b>
+            void operator()(std::array<S, a> t, std::array<S, b>& data)
             {
                 size_t start = 0;
                 while (data[start].value.use_count() > 0 && start<data.size())
@@ -89,6 +89,15 @@ namespace mt
                 }
             }
         };
+
+        struct get_node_value :public boost::static_visitor < std::shared_ptr<T>>
+        {
+            template<class T>
+            std::shared_ptr<T> operator()(T t)
+            {
+                return t.reference_value();
+            }
+        }
 
         /*
         * gets the list of reference objects in the node for routing or leaf objects
@@ -141,7 +150,7 @@ namespace mt
         */
         struct routing_object
         {
-            ID id; //TODO FIND A WAY TO REMOVE
+            
             std::weak_ptr<T> value;
             std::shared_ptr<tree_node> covering_tree;
             double covering_radius;
@@ -149,6 +158,11 @@ namespace mt
 
             routing_object() :covering_radius(0), distance(0)
             {}
+
+            std::shared_ptr<T> reference_value()
+            {
+                return value.lock();
+            }
         };
 
         /*
@@ -160,13 +174,18 @@ namespace mt
             std::shared_ptr<T> value;
             ID id;
             R distance;
+
+            std::shared_ptr<T> reference_value()
+            {
+                return value;
+            }
         };
 
 
     public:
         //Constructors and destructors 
-        M_Tree(distance_function dist_func = distance_function());
-        ~M_Tree();
+        m_tree(distance_function dist_func = distance_function());
+        ~m_tree();
 
         void set_distance_function(distance_function dist_func);
 
@@ -272,7 +291,7 @@ namespace mt
 
 
     template < class T, size_t C, typename R, typename ID>
-    M_Tree<T, C, R, ID>::M_Tree(distance_function dist_func) :
+    m_tree<T, C, R, ID>::m_tree(distance_function dist_func) :
         d(dist_func),
         policy(split_policy::M_LB_DIST),
         partition_method(partition_algorithm::BALANCED)
@@ -282,27 +301,27 @@ namespace mt
         root = std::make_shared<tree_node>();
 
         using namespace std::placeholders;
-        split_functions[split_policy::MIN_MAXRAD] = std::bind(&M_Tree<T, C, R, ID>::minimise_max_radius, this, _1, _2, _3);
-        split_functions[split_policy::M_LB_DIST] = std::bind(&M_Tree<T, C, R, ID>::maximise_distance_lower_bound, this, _1, _2, _3);
-        split_functions[split_policy::RANDOM] = std::bind(&M_Tree<T, C, R, ID>::random, this, _1, _2, _3);
-        split_functions[split_policy::MIN_RAD] = std::bind(&M_Tree<T, C, R, ID>::minimise_radius, this, _1, _2, _3);
+        split_functions[split_policy::MIN_MAXRAD] = std::bind(&m_tree<T, C, R, ID>::minimise_max_radius, this, _1, _2, _3);
+        split_functions[split_policy::M_LB_DIST] = std::bind(&m_tree<T, C, R, ID>::maximise_distance_lower_bound, this, _1, _2, _3);
+        split_functions[split_policy::RANDOM] = std::bind(&m_tree<T, C, R, ID>::random, this, _1, _2, _3);
+        split_functions[split_policy::MIN_RAD] = std::bind(&m_tree<T, C, R, ID>::minimise_radius, this, _1, _2, _3);
     }
 
 
     template < class T, size_t C, typename R, typename ID>
-    M_Tree<T, C, R, ID>::~M_Tree()
+    m_tree<T, C, R, ID>::~m_tree()
     {
 
     }
 
     template < class T, size_t C, typename R, typename ID>
-    void M_Tree<T, C, R, ID>::set_distance_function(distance_function dist_func)
+    void m_tree<T, C, R, ID>::set_distance_function(distance_function dist_func)
     {
         d = dist_func;
     }
 
     template < class T, size_t C, typename R, typename ID>
-    void M_Tree<T, C, R, ID>::insert(ID id, std::shared_ptr<T> t)
+    void m_tree<T, C, R, ID>::insert(ID id, std::shared_ptr<T> t)
     {
         if (!root)
         {
@@ -312,7 +331,7 @@ namespace mt
     }
 
     template < class T, size_t C, typename R, typename ID>
-    void M_Tree<T, C, R, ID>::insert(ID id, std::weak_ptr<T> t, std::weak_ptr<tree_node> node)
+    void m_tree<T, C, R, ID>::insert(ID id, std::weak_ptr<T> t, std::weak_ptr<tree_node> node)
     {
         if (auto lock = node.lock())
         {
@@ -328,7 +347,7 @@ namespace mt
     }
 
     template < class T, size_t C, typename R, typename ID>
-    void M_Tree<T, C, R, ID>::internal_node_insert(ID id, std::weak_ptr<T> t, std::weak_ptr<tree_node> N)
+    void m_tree<T, C, R, ID>::internal_node_insert(ID id, std::weak_ptr<T> t, std::weak_ptr<tree_node> N)
     {
         if (auto lock = N.lock())
         {
@@ -363,7 +382,7 @@ namespace mt
 
 
     template < class T, size_t C, typename R, typename ID>
-    void M_Tree<T, C, R, ID>::leaf_node_insert(ID id, std::weak_ptr<T> t, std::weak_ptr<tree_node> lo)
+    void m_tree<T, C, R, ID>::leaf_node_insert(ID id, std::weak_ptr<T> t, std::weak_ptr<tree_node> lo)
     {
         if (auto lock = lo.lock())
         {
@@ -385,8 +404,9 @@ namespace mt
     }
 
     template < class T, size_t C, typename R, typename ID>
-    void M_Tree<T, C, R, ID>::split(ID id, std::weak_ptr<T> t, std::weak_ptr<tree_node> n)
+    void m_tree<T, C, R, ID>::split(ID id, std::weak_ptr<T> t, std::weak_ptr<tree_node> n)
     {
+        //PLAN vector of tree nodes, create leaf node with t and id in it
         std::vector<std::pair<ID, std::weak_ptr<T>>> n_set;
         n_set.push_back(std::make_pair(id, t));
         if (auto locked = n.lock())
@@ -443,7 +463,7 @@ namespace mt
         Currently just implements random distribution. 
     */
     template < class T, size_t C, typename R, typename ID>
-    void M_Tree<T, C, R, ID>::promote(std::vector<std::pair<ID, std::weak_ptr<T>>> n, routing_object& o1, routing_object& o2)
+    void m_tree<T, C, R, ID>::promote(std::vector<std::pair<ID, std::weak_ptr<T>>> n, routing_object& o1, routing_object& o2)
     {
         auto fn = split_functions.find(policy);
         maximise_distance_lower_bound(n, o1, o2);
@@ -454,8 +474,9 @@ namespace mt
     }
 
     template < class T, size_t C, typename R, typename ID>
-    void M_Tree<T, C, R, ID>::partition(std::vector<std::pair<ID, std::weak_ptr<T>>> o, routing_object& n1, routing_object& n2, std::vector<R> distances)
+    void m_tree<T, C, R, ID>::partition(std::vector<std::pair<ID, std::weak_ptr<T>>> o, routing_object& n1, routing_object& n2, std::vector<R> distances)
     {
+        //vector of tree nodes in
         if (distances.empty())
         {
             std::vector<std::weak_ptr<T>> temp(o.size());
@@ -473,7 +494,7 @@ namespace mt
     }
 
     template < class T, size_t C, typename R, typename ID>
-    void M_Tree<T, C, R, ID>::balanced_partition(std::vector<std::pair<ID, std::weak_ptr<T>>> o, 
+    void m_tree<T, C, R, ID>::balanced_partition(std::vector<std::pair<ID, std::weak_ptr<T>>> o, 
                                                  std::vector<R> distances, routing_object& n1, routing_object& n2)
     {
         using namespace std::placeholders;
@@ -550,7 +571,7 @@ namespace mt
 
 
     template < class T, size_t C, typename R, typename ID>
-    void M_Tree<T, C, R, ID>::minimise_radius(std::vector<std::pair<ID, std::weak_ptr<T>>> t, routing_object& o1, routing_object& o2)
+    void m_tree<T, C, R, ID>::minimise_radius(std::vector<std::pair<ID, std::weak_ptr<T>>> t, routing_object& o1, routing_object& o2)
     {
         R best_cover_radius = std::numeric_limits<R>::max();
         std::vector<R> distance_matrix;
@@ -588,7 +609,7 @@ namespace mt
 
 
     template < class T, size_t C, typename R, typename ID>
-    void M_Tree<T, C, R, ID>::minimise_max_radius(std::vector<std::pair<ID, std::weak_ptr<T>>> t, routing_object& o1, routing_object& o2)
+    void m_tree<T, C, R, ID>::minimise_max_radius(std::vector<std::pair<ID, std::weak_ptr<T>>> t, routing_object& o1, routing_object& o2)
     {
         R best_cover_radius = std::numeric_limits<R>::max();
         std::vector<R> distance_matrix;
@@ -626,7 +647,7 @@ namespace mt
 
 
     template < class T, size_t C, typename R, typename ID>
-    void M_Tree<T, C, R, ID>::maximise_distance_lower_bound(std::vector<std::pair<ID, std::weak_ptr<T>>> t, routing_object& o1, routing_object& o2)
+    void m_tree<T, C, R, ID>::maximise_distance_lower_bound(std::vector<std::pair<ID, std::weak_ptr<T>>> t, routing_object& o1, routing_object& o2)
     {
         double max_distance = 0.0;
         for (size_t i = 0; i < t.size(); i++)
@@ -655,7 +676,7 @@ namespace mt
 
 
     template < class T, size_t C, typename R, typename ID>
-    void M_Tree<T, C, R, ID>::random(std::vector<std::pair<ID, std::weak_ptr<T>>> t, routing_object& o1, routing_object& o2)
+    void m_tree<T, C, R, ID>::random(std::vector<std::pair<ID, std::weak_ptr<T>>> t, routing_object& o1, routing_object& o2)
     {
         std::default_random_engine generator;
         std::uniform_int_distribution<int> distribution(0, t.size() - 1);
@@ -673,7 +694,7 @@ namespace mt
 
 
     template < class T, size_t C, typename R, typename ID>
-    void M_Tree<T, C, R, ID>::sampling(std::vector<std::pair<ID, std::weak_ptr<T>>> t, routing_object& o1, routing_object& o2)
+    void m_tree<T, C, R, ID>::sampling(std::vector<std::pair<ID, std::weak_ptr<T>>> t, routing_object& o1, routing_object& o2)
     {
 
     }
@@ -681,7 +702,7 @@ namespace mt
         index done by width*row + column
     */
     template < class T, size_t C, typename R, typename ID>
-    void M_Tree<T, C, R, ID>::calculate_distance_matrix(const std::vector<std::weak_ptr<T>>& n, std::vector<R>& dst)
+    void m_tree<T, C, R, ID>::calculate_distance_matrix(const std::vector<std::weak_ptr<T>>& n, std::vector<R>& dst)
     {
         dst.resize(n.size() * n.size());
         for (size_t i = 0; i < n.size(); i++)
