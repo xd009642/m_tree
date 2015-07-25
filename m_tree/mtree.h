@@ -233,8 +233,8 @@ namespace mt
         //begin end
 
         //range and nearest neighbour searches
-        std::vector<T> range_query(const T& ref, R range);
-        std::vector<T> knn_query(const T& ref, int k);
+        std::vector<ID> range_query(const T& ref, R range);
+        std::vector<ID> knn_query(const T& ref, int k);
 
         //Here for debugging purposes
         void print(std::weak_ptr<tree_node> print_node = std::weak_ptr<tree_node>())
@@ -750,6 +750,46 @@ namespace mt
         }
     }
     
+    template < class T, size_t C, typename R, typename ID>
+    std::vector<ID> m_tree<T, C, R, ID>::range_query(const T& ref, R range)
+    {
+        get_node_value getter;
+        std::vector<std::weak_ptr<tree_node>> queue;
+        queue.push_back(root);
+        while (false == queue.empty())
+        {
+            R dist_to_parent = 0;
+            if (auto locked = queue[0].lock())
+            {
+                //implement a distance to parent function here
+                if (current->internal_node())
+                {
+                    route_set& ros = boost::get<route_set>(locked->data);
+                    for (size_t i = 0; i < C; i++)
+                    {
+                        if (auto temp_lock = ros[i].value.lock())
+                        {
+                            if ((std::abs(dist_to_parent - ros[i].distance) <=
+                                range + ros[i].covering_radius) && auto v = ros[i].value.lock())
+                            {
+                                if (d(ref, *v) < range + ros[i].covering_radius)
+                                    queue.push_back(ros[i].covering_tree);
+                            }
+                        }
+                    }
+                }
+                else if (current->leaf_node())
+                {
+                    leaf_set& ros = boost::get<leaf_set>(locked->data);
+                    for (size_t i = 0; i < C; i++)
+                    {
+
+                    }
+                }
+            }
+            queue.erase(std::begin(queue));
+        }
+    }
 }
 
 
