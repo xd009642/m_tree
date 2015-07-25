@@ -17,7 +17,7 @@ int main()
     mt::m_tree<double, 3> tree = mt::m_tree<double, 3>(std::function<double(const double&, const double&)>(l2));
     for (size_t i = 0; i < 10; i++)
     {
-        if (i > 5)
+        if (i > 2)
             i = i;
         double temp = (double)(rand() % 100);
         std::cout << "inserting " << temp << std::endl;
