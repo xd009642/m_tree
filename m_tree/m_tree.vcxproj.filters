@@ -21,9 +21,6 @@
     <ClInclude Include="sandbox.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="meta_wizard.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">

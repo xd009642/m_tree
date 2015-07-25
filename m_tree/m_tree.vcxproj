@@ -66,7 +66,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="meta_wizard.h" />
     <ClInclude Include="mtree.h" />
     <ClInclude Include="sandbox.h" />
   </ItemGroup>
