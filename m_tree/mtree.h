@@ -81,18 +81,7 @@ namespace mt
             {
                 BOOST_ASSERT_MSG(true, "EXPECTED DIFFERENT TYPES");
             }
-           /* template<class S, size_t a, size_t b>
-            void operator()(std::array<S, a> t, std::array<S, b>& data)
-            {
-                size_t start = 0;
-                while (data[start].value.use_count() > 0 && start < data.size())
-                    start++;
-                for (size_t i = 0; i < t.size(); i++)
-                {
-                    if (t[i].value.use_count()>0 && start + i < data.size())
-                        data[start + i] = t[i];
-                }
-            }*/
+            
             template<class S, size_t a=C>
             void operator()(std::array<S, a> t)
             {
@@ -151,7 +140,6 @@ namespace mt
                         break;
                     }
                 }
-                std::cout << "set was full :("<<std::endl; //TODO REMOVE
             }
 
             template<typename X, typename Y>
@@ -566,7 +554,7 @@ namespace mt
         std::sort(std::begin(d2), std::end(d2), sort_pred);
         size_t x = 0, y = 0;
         data_variant data_1, data_2;
-        if (typeid(o[0]) == typeid(leaf_object))
+        if (o[0].type() == typeid(leaf_object))
         {
             data_1 = leaf_set();
             data_2 = leaf_set();
