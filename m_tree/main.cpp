@@ -19,10 +19,12 @@ int main()
     {
         if (i > 2)
             i = i;
+        if (i == 9)
+            i = i;
         double temp = (double)(rand() % 100);
         std::cout << "inserting " << temp << std::endl;
         tree.insert(i, std::make_shared<double>(temp));
-        tree.print();
+        tree.print(true);
         std::cout << "_______________________________________" << std::endl;
     }
 

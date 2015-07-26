@@ -104,12 +104,11 @@ namespace mt
 
         /*
         * gets the list of reference objects in the node for routing or leaf objects
-        TODO - is this visitor needed anymore?
         */
         struct get_object_values :public boost::static_visitor<>
         {
-            std::vector<std::pair<ID, std::weak_ptr<T>>>& values;
-            get_object_values(std::vector<std::pair<ID, std::weak_ptr<T>>>& v) :values(v)
+            std::vector<std::weak_ptr<T>>& values;
+            get_object_values(std::vector<std::weak_ptr<T>>& v) :values(v)
             {	}
 
             template<typename X>
@@ -119,7 +118,7 @@ namespace mt
                 {
                     if (x[i].value.use_count() > 0)
                     {
-                        values.push_back(std::make_pair(0, x[i].value));
+                        values.push_back(x[i].value);
                     }
                 }
             }
@@ -201,7 +200,8 @@ namespace mt
             std::shared_ptr<T> value;
             ID id;
             R distance;
-
+            leaf_object() :distance(0)
+            {}
             std::shared_ptr<T> reference_value()
             {
                 return value;
@@ -215,6 +215,8 @@ namespace mt
         ~m_tree();
 
         void set_distance_function(distance_function dist_func);
+        void set_split_policy(split_policy policy);
+        void set_partition_algorithm(partition_algorithm algorithm);
 
         size_t size() const;
         bool empty() const;
@@ -237,7 +239,7 @@ namespace mt
         std::vector<ID> knn_query(const T& ref, int k);
 
         //Here for debugging purposes
-        void print(std::weak_ptr<tree_node> print_node = std::weak_ptr<tree_node>())
+        void print(bool print_distances = false, std::weak_ptr<tree_node> print_node = std::weak_ptr<tree_node>())
         {
             
             std::vector<std::weak_ptr<tree_node>> queue;
@@ -260,6 +262,8 @@ namespace mt
                         if (auto lock = ro_array[i].value.lock())
                         {
                             std::cout << *lock;
+                            if (print_distances)
+                                std::cout<< ":" << ro_array[i].distance;
                             if (ro_array[i].covering_tree)
                                 queue.push_back(ro_array[i].covering_tree);
                         }
@@ -270,16 +274,22 @@ namespace mt
                 }
                 else if (current->leaf_node())
                 {
-                    leaf_set& ro_array = boost::get<leaf_set>(current->data);
+                    leaf_set& lo_array = boost::get<leaf_set>(current->data);
                     std::cout << "| ";
-                    for (size_t i = 0; i < ro_array.size(); i++)
+                    for (size_t i = 0; i < lo_array.size(); i++)
                     {
                         if (i > 0)
                             std::cout << ", ";
-                        if (ro_array[i].value)
-                            std::cout << *ro_array[i].value;
+                        if (lo_array[i].value)
+                        {
+                            std::cout << *lo_array[i].value;
+                            if (print_distances)
+                                std::cout << ":" << lo_array[i].distance;
+                        }
                         else
+                        {
                             std::cout << "_";
+                        }
                     }
                     std::cout << "| " << std::endl;
                 }
@@ -343,6 +353,19 @@ namespace mt
     void m_tree<T, C, R, ID>::set_distance_function(distance_function dist_func)
     {
         d = dist_func;
+    }
+
+
+    template < class T, size_t C, typename R, typename ID>
+    void m_tree<T, C, R, ID>::set_split_policy(split_policy p)
+    {
+        policy = p;
+    }
+
+    template < class T, size_t C, typename R, typename ID>
+    void m_tree<T, C, R, ID>::set_partition_algorithm(partition_algorithm algorithm)
+    {
+        partition_method = algorithm;
     }
 
     template < class T, size_t C, typename R, typename ID>
@@ -418,9 +441,25 @@ namespace mt
             {
                 if (false == ls[i].value)
                 {
+                    if (auto parent = lock->parent.lock())
+                    {
+                        std::vector<std::weak_ptr<T>> values;
+                        get_object_values getter(values);
+                        boost::apply_visitor(getter, parent->data);
+                        for (size_t j = 0; j < C; j++)
+                        {
+                            for (size_t k = 0; k < C; k++)
+                            {
+                                if (values[j].lock() == ls[k].value && nullptr != ls[k].value)
+                                {
+                                    ls[i].distance = d(*ls[k].value, *t.lock());
+                                    j = C; k = C; //quick break out of loop
+                                }
+                            }
+                        }
+                    }
                     ls[i].value = t.lock();
                     ls[i].id = id;
-                    //TODO set distance...?
                     return;
                 }
             }
