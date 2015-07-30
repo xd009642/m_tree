@@ -127,17 +127,26 @@ namespace mt
         struct update_parent :public boost::static_visitor<>
         {
             std::weak_ptr<tree_node> parent;
-
-            void operator()(route_set& routers)
+            distance_function d;
+            update_parent(distance_function dist_func) :d(dist_func){}
+            
+            template<class X>
+            void operator()(X x, route_set& routers)
             {
                 for (routing_object& r : routers)
                 {
                     if (r.covering_tree)
+                    {
+                        if (auto lock = r.value.lock())
+                        {
+                            r.distance = d(*lock, *x.reference_value());
+                        }
                         r.covering_tree->parent = parent;
+                    }
                 }
             }
-            template<class T>
-            void operator()(T t)
+            template<class X, class Y>
+            void operator()(X x, Y& y)
             {
 
             }
@@ -659,15 +668,15 @@ namespace mt
                 y++;
             }
         }
-        update_parent parent_visitor;
+        update_parent parent_visitor(d);
         n1.covering_tree = std::make_shared<tree_node>();
         parent_visitor.parent = n1.covering_tree;
-        boost::apply_visitor(parent_visitor, data_1);
+        boost::apply_visitor(parent_visitor, o[n1_index], data_1);
         n1.covering_tree->data = data_1;
 
         n2.covering_tree = std::make_shared<tree_node>();
         parent_visitor.parent = n2.covering_tree;
-        boost::apply_visitor(parent_visitor, data_2);
+        boost::apply_visitor(parent_visitor, o[n2_index], data_2);
         n2.covering_tree->data = data_2;
     }
 

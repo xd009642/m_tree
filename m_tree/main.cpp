@@ -18,7 +18,7 @@ int main()
 	auto l2_dist = std::function<double(const double&, const double&)>(l2);
 
     mt::m_tree<double, 3> tree = mt::m_tree<double, 3>(std::function<double(const double&, const double&)>(l2));
-    for (size_t i = 0; i < 22; i++)
+    for (size_t i = 0; i < 15; i++)
     {
         double temp = (double)(rand() % 100);
         std::cout  << temp << ", ";//std::endl;
