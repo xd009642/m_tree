@@ -124,6 +124,25 @@ namespace mt
             }
         };
 
+        struct update_parent :public boost::static_visitor<>
+        {
+            std::weak_ptr<tree_node> parent;
+
+            void operator()(route_set& routers)
+            {
+                for (routing_object& r : routers)
+                {
+                    if (r.covering_tree)
+                        r.covering_tree->parent = parent;
+                }
+            }
+            template<class T>
+            void operator()(T t)
+            {
+
+            }
+        };
+
         struct save_object_to_set :public boost::static_visitor<>
         {
             R distance;
@@ -270,6 +289,8 @@ namespace mt
                         else
                             std::cout << "_";
                     }
+                    if (!current->parent.lock())
+                        std::cout << " no parent";
                     std::cout << "| " << std::endl;
                 }
                 else if (current->leaf_node())
@@ -291,7 +312,10 @@ namespace mt
                             std::cout << "_";
                         }
                     }
+                    if (!current->parent.lock())
+                        std::cout << " no parent";
                     std::cout << "| " << std::endl;
+
                 }
             }
         }
@@ -503,13 +527,13 @@ namespace mt
                     {
                         if (parent_ros[i].covering_tree == locked)
                         {
-                            parent_ros[i] = o1;
                             o1.covering_tree->parent = p_lock;
+                            parent_ros[i] = o1;
                         }
                         else if (false == parent_ros[i].covering_tree)
                         {
-                            parent_ros[i] = o2;
                             o2.covering_tree->parent = p_lock;
+                            parent_ros[i] = o2;
                             split_again = false;
                         }
                     }
@@ -635,9 +659,15 @@ namespace mt
                 y++;
             }
         }
+        update_parent parent_visitor;
         n1.covering_tree = std::make_shared<tree_node>();
+        parent_visitor.parent = n1.covering_tree;
+        boost::apply_visitor(parent_visitor, data_1);
         n1.covering_tree->data = data_1;
+
         n2.covering_tree = std::make_shared<tree_node>();
+        parent_visitor.parent = n2.covering_tree;
+        boost::apply_visitor(parent_visitor, data_2);
         n2.covering_tree->data = data_2;
     }
 
