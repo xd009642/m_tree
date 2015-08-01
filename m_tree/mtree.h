@@ -537,8 +537,13 @@ namespace mt
                         if (parent_ros[i].covering_tree && parent_ros[i].distance == 0)
                         {                            
                             if (auto r_temp = parent_ros[i].value.lock())
+                            {
                                 if (auto l_temp = o2.value.lock())
                                     o2.distance = d(*r_temp, *l_temp);
+                                
+                                if (auto l_temp = o1.value.lock())
+                                    o1.distance = d(*r_temp, *l_temp);
+                            }
                         }
                         if (parent_ros[i].covering_tree == locked)
                         {

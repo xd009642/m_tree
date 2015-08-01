@@ -21,7 +21,7 @@ int main()
     for (size_t i = 0; i < 15; i++)
     {
         double temp = (double)(rand() % 100);
-        if (5 == temp)
+        if (61 == temp)
             i = i;
         std::cout  << temp << ", ";//std::endl;
         tree.insert(i, std::make_shared<double>(temp));
