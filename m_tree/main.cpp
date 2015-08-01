@@ -18,17 +18,15 @@ int main()
 	auto l2_dist = std::function<double(const double&, const double&)>(l2);
 
     mt::m_tree<double, 3> tree = mt::m_tree<double, 3>(std::function<double(const double&, const double&)>(l2));
+    std::vector<double> entries;
     for (size_t i = 0; i < 15; i++)
     {
         double temp = (double)(rand() % 100);
-        if (61 == temp)
-            i = i;
-        std::cout  << temp << ", ";//std::endl;
+        entries.push_back(temp);
         tree.insert(i, std::make_shared<double>(temp));
-        std::cout << std::endl << "_______________________________________" << std::endl;
-        tree.print(true);
-        std::cout << "_______________________________________" << std::endl;     
     }
-
+    auto res=tree.range_query(60, 10);
+    for (int i : res)
+        std::cout << entries[i] << ", ";
 	return 0;
 }

@@ -14,6 +14,10 @@
 
 namespace mt
 {
+    enum print_level
+    {
+        SPARSE = 0, DISTANCE = 1 << 0, RADIUS =  1 << 1
+    };
     /*
         Taken from "M-tree: An Efficient Access Method for Similarity Search in Metric Spaces"
         (P. Ciaccia, M. Patella, P. Zezula). Defines the method used when splitting a leaf node up
@@ -69,6 +73,21 @@ namespace mt
         typedef std::vector<boost::variant<leaf_object, routing_object>> data_vector;
         typedef std::function<R(const T&, const T&)> distance_function;
         typedef std::function<void(const data_vector&, routing_object& o1, routing_object& o2)> partition_function;
+
+
+        struct get_parent_value :public boost::static_visitor<std::shared_ptr<T>>
+        {
+            template<class X>
+            std::shared_ptr<T> operator()(X t)
+            {
+                for (int i = 0; i < C; i++)
+                {
+                    if (t[i].value.use_count()>0 && t[i].distance == 0)
+                        return t[i].reference_value();
+                }
+                return std::shared_ptr<T>();
+            }
+        };
 
         //Gets data entries in the form of an array of routing or leaf objects
         struct get_data_entries :public boost::static_visitor<>
@@ -267,7 +286,7 @@ namespace mt
         std::vector<ID> knn_query(const T& ref, int k);
 
         //Here for debugging purposes
-        void print(bool print_distances = false, std::weak_ptr<tree_node> print_node = std::weak_ptr<tree_node>())
+        void print(print_level level = SPARSE, std::weak_ptr<tree_node> print_node = std::weak_ptr<tree_node>())
         {
             
             std::vector<std::weak_ptr<tree_node>> queue;
@@ -290,8 +309,12 @@ namespace mt
                         if (auto lock = ro_array[i].value.lock())
                         {
                             std::cout << *lock;
-                            if (print_distances)
-                                std::cout<< ":" << ro_array[i].distance;
+                            if (!level)
+                                std::cout << ":";
+                            if (level & print_level::DISTANCE)
+                                std::cout<< " " << ro_array[i].distance;
+                            if (level & print_level::RADIUS)
+                                std::cout << " " << ro_array[i].covering_radius;
                             if (ro_array[i].covering_tree)
                                 queue.push_back(ro_array[i].covering_tree);
                         }
@@ -313,8 +336,10 @@ namespace mt
                         if (lo_array[i].value)
                         {
                             std::cout << *lo_array[i].value;
-                            if (print_distances)
-                                std::cout << ":" << lo_array[i].distance;
+                            if (!level)
+                                std::cout << ":";
+                            if (level & print_level::DISTANCE)
+                                std::cout << " " << lo_array[i].distance;
                         }
                         else
                         {
@@ -859,42 +884,56 @@ namespace mt
     template < class T, size_t C, typename R, typename ID>
     std::vector<ID> m_tree<T, C, R, ID>::range_query(const T& ref, R range)
     {
-        get_node_value getter;
+        std::vector<ID> result;
+        get_parent_value parent_getter;
         std::vector<std::weak_ptr<tree_node>> queue;
         queue.push_back(root);
         while (false == queue.empty())
         {
-            R dist_to_parent = 0;
             if (auto locked = queue[0].lock())
             {
                 //implement a distance to parent function here
-                if (current->internal_node())
+                R dist_to_parent = 0;
+                std::shared_ptr<T> parent_value = boost::apply_visitor(parent_getter, locked->data);
+                if (parent_value && (false == locked->parent.expired()))
+                    dist_to_parent = d(ref, *parent_value);
+                if (locked->internal_node())
                 {
                     route_set& ros = boost::get<route_set>(locked->data);
                     for (size_t i = 0; i < C; i++)
                     {
                         if (auto temp_lock = ros[i].value.lock())
                         {
-                            if ((std::abs(dist_to_parent - ros[i].distance) <=
-                                range + ros[i].covering_radius) && auto v = ros[i].value.lock())
+                            if (std::abs(dist_to_parent - ros[i].distance) <= range + ros[i].covering_radius)
                             {
-                                if (d(ref, *v) < range + ros[i].covering_radius)
+                                R distance = std::numeric_limits<R>::max();
+                                if (auto v = ros[i].value.lock())
+                                    distance = d(ref, *v);
+                                if (distance < range + ros[i].covering_radius)
                                     queue.push_back(ros[i].covering_tree);
                             }
                         }
                     }
                 }
-                else if (current->leaf_node())
+                else if (locked->leaf_node())
                 {
-                    leaf_set& ros = boost::get<leaf_set>(locked->data);
+                    leaf_set& los = boost::get<leaf_set>(locked->data);
                     for (size_t i = 0; i < C; i++)
                     {
-
+                        if (los[i].value)
+                        {
+                            if (std::abs(dist_to_parent - los[i].distance) < range)
+                            {
+                                if (d(*los[i].value, ref) <= range)
+                                    result.push_back(los[i].id);
+                            }
+                        }
                     }
                 }
             }
             queue.erase(std::begin(queue));
         }
+        return result;
     }
 }
 
