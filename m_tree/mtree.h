@@ -534,6 +534,12 @@ namespace mt
                     route_set& parent_ros = boost::get<route_set>(p_lock->data);
                     for (size_t i = 0; i < parent_ros.size(); i++)
                     {
+                        if (parent_ros[i].covering_tree && parent_ros[i].distance == 0)
+                        {                            
+                            if (auto r_temp = parent_ros[i].value.lock())
+                                if (auto l_temp = o2.value.lock())
+                                    o2.distance = d(*r_temp, *l_temp);
+                        }
                         if (parent_ros[i].covering_tree == locked)
                         {
                             o1.covering_tree->parent = p_lock;
@@ -541,6 +547,7 @@ namespace mt
                         }
                         else if (false == parent_ros[i].covering_tree)
                         {
+
                             o2.covering_tree->parent = p_lock;
                             parent_ros[i] = o2;
                             split_again = false;
@@ -574,8 +581,9 @@ namespace mt
         case split_policy::RANDOM:
             random(objs, o1, o2);
             break;
-        default:
-            std::cout << "policy not yet implemented." << std::endl;
+        case split_policy::SAMPLING:
+            sampling(objs, o1, o2);
+            break;
         }
     }
 
@@ -768,14 +776,29 @@ namespace mt
         partition(objects, o1, o2);
     }
 
+
     template < class T, size_t C, typename R, typename ID>
     void m_tree<T, C, R, ID>::sampling(const data_vector& objects, routing_object& o1, routing_object& o2)
     {
-
+        //This sampling algorithm takes max(2, 0.1*C) samples and chooses the pair of objects that minimise 
+        //the covering radius. This value was chosen as it is used in the reference literature and seems sensible
+        size_t samples = static_cast<size_t>(std::max(2.0, 0.1*C));
+        std::pair<routing_object, routing_object> best_sample;
+        R radius_sum = std::numeric_limits<R>::max();
+        for (size_t i = 0; i < samples; i++)
+        {
+            std::pair<routing_object, routing_object> current_sample;
+            random(objects, current_sample.first, current_sample.second);
+            if (radius_sum > (current_sample.first.covering_radius + current_sample.second.covering_radius))
+            {
+                radius_sum = (current_sample.first.covering_radius + current_sample.second.covering_radius);
+                best_sample = current_sample;
+            }
+        }
+        o1 = best_sample.first;
+        o2 = best_sample.second;
     }
 
-
-    
 
     template < class T, size_t C, typename R, typename ID>
     void m_tree<T, C, R, ID>::maximise_distance_lower_bound(const data_vector& objects, routing_object& o1, routing_object& o2)

@@ -21,12 +21,14 @@ int main()
     for (size_t i = 0; i < 15; i++)
     {
         double temp = (double)(rand() % 100);
+        if (5 == temp)
+            i = i;
         std::cout  << temp << ", ";//std::endl;
-        tree.insert(i, std::make_shared<double>(temp));     
+        tree.insert(i, std::make_shared<double>(temp));
+        std::cout << std::endl << "_______________________________________" << std::endl;
+        tree.print(true);
+        std::cout << "_______________________________________" << std::endl;     
     }
 
-    std::cout << "_______________________________________" << std::endl;
-    tree.print(true);
-    std::cout << "_______________________________________" << std::endl;
 	return 0;
 }
