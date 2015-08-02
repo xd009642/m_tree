@@ -283,7 +283,7 @@ namespace mt
 
         //range and nearest neighbour searches
         std::vector<ID> range_query(const T& ref, R range);
-        std::vector<ID> knn_query(const T& ref, int k);
+        std::vector<ID> knn_query(const T& ref, size_t k);
 
         //Here for debugging purposes
         void print(print_level level = SPARSE, std::weak_ptr<tree_node> print_node = std::weak_ptr<tree_node>())
@@ -932,6 +932,33 @@ namespace mt
                 }
             }
             queue.erase(std::begin(queue));
+        }
+        return result;
+    }
+
+    template < class T, size_t C, typename R, typename ID>
+    std::vector<ID> m_tree<T, C, R, ID>::knn_query(const T& ref, size_t k)
+    {
+        std::vector<ID> result;
+        std::vector<std::weak_ptr<tree_node>> queue;
+        if (root)
+            queue.push_back(root);
+        for (size_t i = 0; i < k; i++)
+        {
+            while (false == queue.empty())
+            {
+                //choose_node
+                std::shared_ptr<tree_node> current; //grabbed from choose node
+                //knn_node_search
+                if (current->internal_node())
+                {
+
+                }
+                else
+                {
+
+                }
+            }
         }
         return result;
     }
