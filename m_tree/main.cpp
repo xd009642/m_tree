@@ -26,6 +26,7 @@ int main()
         tree.insert(i, std::make_shared<double>(temp));
     }
     auto res=tree.range_query(60, 10);
+    auto res2 = tree.knn_query(60, 2);
     for (int i : res)
         std::cout << entries[i] << ", ";
 	return 0;

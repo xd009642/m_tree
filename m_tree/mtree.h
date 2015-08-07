@@ -74,6 +74,29 @@ namespace mt
         typedef std::function<R(const T&, const T&)> distance_function;
         typedef std::function<void(const data_vector&, routing_object& o1, routing_object& o2)> partition_function;
 
+        struct get_subtrees :public boost::static_visitor<>
+        {
+            std::vector<std::weak_ptr<tree_node>>& trees;
+            get_subtrees(std::vector<std::weak_ptr<tree_node>>& t) :trees(t){}
+
+            template<class X>
+            void operator()(const X& routers)
+            {
+
+            }
+
+            void operator()(const route_set& routers)
+            {
+                for (const routing_object& r : routers)
+                {
+                    if (r.covering_tree)
+                    {
+                        trees.push_back(r.covering_tree);
+                    }
+                }
+            }
+            
+        };
 
         struct get_parent_value :public boost::static_visitor<std::shared_ptr<T>>
         {
@@ -283,7 +306,7 @@ namespace mt
 
         //range and nearest neighbour searches
         std::vector<ID> range_query(const T& ref, R range);
-        std::vector<ID> knn_query(const T& ref, size_t k);
+        std::vector<std::pair<ID, R>> knn_query(const T& ref, size_t k);
 
         //Here for debugging purposes
         void print(print_level level = SPARSE, std::weak_ptr<tree_node> print_node = std::weak_ptr<tree_node>())
@@ -355,6 +378,12 @@ namespace mt
         }
 
     protected:
+
+        //Functions used by the knn_query
+        void choose_node(const T& ref, std::vector<std::weak_ptr<tree_node>>& queue, std::weak_ptr<tree_node>& current);
+        void knn_node_search(const T& ref, std::shared_ptr<tree_node> current, size_t k,
+            std::vector<std::weak_ptr<tree_node>>& queue, std::vector<std::pair<ID, R>>& result);
+
         //insert functions, used to break up functionality or abstract away the implementation
         void insert(ID id, std::weak_ptr<T> t, std::weak_ptr<tree_node> node);
         void internal_node_insert(ID id, std::weak_ptr<T> t, std::weak_ptr<tree_node> N);
@@ -385,6 +414,10 @@ namespace mt
         split_policy policy;
         partition_algorithm partition_method;
     };
+
+
+
+
 
 
 
@@ -887,7 +920,8 @@ namespace mt
         std::vector<ID> result;
         get_parent_value parent_getter;
         std::vector<std::weak_ptr<tree_node>> queue;
-        queue.push_back(root);
+        if (root)
+            queue.push_back(root);
         while (false == queue.empty())
         {
             if (auto locked = queue[0].lock())
@@ -937,30 +971,86 @@ namespace mt
     }
 
     template < class T, size_t C, typename R, typename ID>
-    std::vector<ID> m_tree<T, C, R, ID>::knn_query(const T& ref, size_t k)
+    std::vector<std::pair<ID, R>> m_tree<T, C, R, ID>::knn_query(const T& ref, size_t k)
     {
-        std::vector<ID> result;
+        std::vector<std::pair<ID, R>> result;
         std::vector<std::weak_ptr<tree_node>> queue;
         if (root)
-            queue.push_back(root);
-        for (size_t i = 0; i < k; i++)
         {
-            while (false == queue.empty())
+            queue.push_back(root);
+        }
+
+        while (false == queue.empty())
+        {
+            std::weak_ptr<tree_node> current;
+            choose_node(ref, queue, current);
+            knn_node_search(ref, current.lock(), k, queue, result);
+        }
+
+        return result;
+    }
+
+    template < class T, size_t C, typename R, typename ID>
+    void m_tree<T, C, R, ID>::choose_node(const T& ref, std::vector<std::weak_ptr<tree_node>>& queue, std::weak_ptr<tree_node>& chosen)
+    {
+
+    }
+
+    template < class T, size_t C, typename R, typename ID>
+    void m_tree<T, C, R, ID>::knn_node_search(const T& ref, std::shared_ptr<tree_node> current, size_t k,
+        std::vector<std::weak_ptr<tree_node>>& queue, std::vector<std::pair<ID, R>>& result)
+    {
+        if (false == current)
+            return;
+
+        R dp = static_cast<R>(0);
+        get_parent_value getter;
+        std::shared_ptr<T> parent_value = boost::apply_visitor(getter, current->data);
+        if (parent_value && (false == current->parent.expired()))
+            dp = d(*parent_value, ref);
+
+        R dk = std::numeric_limits<R>::max();
+        if (false == result.empty())
+            dk = result.back().second;
+
+        if (current->internal_node())
+        {
+            route_set& set = boost::get<route_set>(current->data);
+            for (const routing_object& ro : set)
             {
-                //choose_node
-                std::shared_ptr<tree_node> current; //grabbed from choose node
-                //knn_node_search
-                if (current->internal_node())
+                if ((false==ro.value.expired()) && 
+                    (std::abs(dp - ro.distance) <= dk + ro.covering_radius))
                 {
-
-                }
-                else
-                {
-
+                    R value_distance = d(*ro.value.lock(), ref);
+                    R dmin=0; // TODO dmin function
+                    if (dmin <= dk)
+                    {
+                        queue.push_back(ro.covering_tree);
+                        if (value_distance + ro.covering_radius < dk)
+                        {
+                            //NN_update
+                            //remove from PR
+                        }
+                    }
                 }
             }
         }
-        return result;
+        else if (current->leaf_node())
+        {
+            leaf_set& set = boost::get<leaf_set>(current->data);
+            for (const leaf_object& leaf : set)
+            {
+                if (leaf.value && std::abs(dp - leaf.distance) <= dk)
+                {
+                    R value_distance = d(*leaf.value, ref);
+                    if (value_distance <= dk)
+                    {
+                        //NN_update
+                        //remove entries from PR
+                    }
+                }
+            }
+        }
     }
 }
 
