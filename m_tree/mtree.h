@@ -380,9 +380,8 @@ namespace mt
     protected:
 
         //Functions used by the knn_query
-        void choose_node(const T& ref, std::vector<std::weak_ptr<tree_node>>& queue, std::weak_ptr<tree_node>& current);
         void knn_node_search(const T& ref, std::shared_ptr<tree_node> current, size_t k,
-            std::vector<std::weak_ptr<tree_node>>& queue, std::vector<std::pair<ID, R>>& result);
+            std::vector<std::pair<R, std::weak_ptr<tree_node>>>& queue, std::vector<std::pair<ID, R>>& result);
 
         //insert functions, used to break up functionality or abstract away the implementation
         void insert(ID id, std::weak_ptr<T> t, std::weak_ptr<tree_node> node);
@@ -973,35 +972,49 @@ namespace mt
     template < class T, size_t C, typename R, typename ID>
     std::vector<std::pair<ID, R>> m_tree<T, C, R, ID>::knn_query(const T& ref, size_t k)
     {
+        BOOST_ASSERT_MSG(k > 0, "knn_query: 0 neighbours is invalid");
+        auto choose_node = [](const std::pair<R, std::weak_ptr<tree_node>>& a, 
+            const std::pair<R, std::weak_ptr<tree_node>>& b)
+        {
+            return a.first < b.first;
+        };
         std::vector<std::pair<ID, R>> result;
-        std::vector<std::weak_ptr<tree_node>> queue;
+        std::vector<std::pair<R, std::weak_ptr<tree_node>>> queue;
         if (root)
         {
-            queue.push_back(root);
+            queue.push_back(std::make_pair(static_cast<R>(0), root));
         }
 
         while (false == queue.empty())
         {
-            std::weak_ptr<tree_node> current;
-            choose_node(ref, queue, current);
-            knn_node_search(ref, current.lock(), k, queue, result);
+            auto current = std::min_element(std::begin(queue), std::end(queue), choose_node);
+            auto node = current->second;
+            queue.erase(current);
+            knn_node_search(ref, node.lock(), k, queue, result);
         }
-
+        if (result.size() > k)
+        {
+            result.erase(std::begin(result) + k, std::end(result));
+        }
         return result;
     }
 
     template < class T, size_t C, typename R, typename ID>
-    void m_tree<T, C, R, ID>::choose_node(const T& ref, std::vector<std::weak_ptr<tree_node>>& queue, std::weak_ptr<tree_node>& chosen)
-    {
-
-    }
-
-    template < class T, size_t C, typename R, typename ID>
     void m_tree<T, C, R, ID>::knn_node_search(const T& ref, std::shared_ptr<tree_node> current, size_t k,
-        std::vector<std::weak_ptr<tree_node>>& queue, std::vector<std::pair<ID, R>>& result)
+        std::vector<std::pair<R, std::weak_ptr<tree_node>>>& queue, std::vector<std::pair<ID, R>>& result)
     {
+        using namespace std::placeholders;
         if (false == current)
             return;
+
+        auto sort_result = [](const std::pair<ID, R>& a, const std::pair<ID, R>& b)
+        {
+            return a.first < b.second;
+        };
+        auto remove_node = [](const std::pair<R, std::weak_ptr<tree_node>>& a, R threshold)
+        {
+            return a.first > threshold;
+        };
 
         R dp = static_cast<R>(0);
         get_parent_value getter;
@@ -1022,14 +1035,20 @@ namespace mt
                     (std::abs(dp - ro.distance) <= dk + ro.covering_radius))
                 {
                     R value_distance = d(*ro.value.lock(), ref);
-                    R dmin=0; // TODO dmin function
+                    R dmin = std::max(value_distance - ro.covering_radius, static_cast<R>(0));
+                    
                     if (dmin <= dk)
                     {
-                        queue.push_back(ro.covering_tree);
-                        if (value_distance + ro.covering_radius < dk)
+                        queue.push_back(std::make_pair(dmin, ro.covering_tree));
+                        R dmax = value_distance + ro.covering_radius;
+                        if (dmax < dk)
                         {
-                            //NN_update
-                            //remove from PR
+                            if (result.empty())
+                                dk = dmax;
+
+                            auto it = std::remove_if(std::begin(queue), std::end(queue), std::bind(remove_node, _1, dk));
+                            if (it != std::end(queue))
+                                queue.erase(it);
                         }
                     }
                 }
@@ -1045,8 +1064,12 @@ namespace mt
                     R value_distance = d(*leaf.value, ref);
                     if (value_distance <= dk)
                     {
-                        //NN_update
-                        //remove entries from PR
+                        result.push_back(std::make_pair(leaf.id, value_distance));
+                        std::sort(std::begin(result), std::end(result));
+                        dk = result.back().second;
+                        auto it = std::remove_if(std::begin(queue), std::end(queue), std::bind(remove_node, _1, dk));
+                        if (it != std::end(queue))
+                            queue.erase(it);
                     }
                 }
             }
