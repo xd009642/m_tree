@@ -23,15 +23,20 @@ int main()
     {
         double temp = (double)(rand() % 100);
         entries.push_back(temp);
-        tree.insert(i, std::make_shared<double>(temp));
+        tree.insert(i+1, std::make_shared<double>(temp));
     }
     auto res=tree.range_query(60, 10);
     auto res2 = tree.knn_query(60, 3);
     for (int i : res)
-        std::cout << entries[i] << ", ";
+        std::cout << entries[i-1] << ", ";
     std::cout << std::endl;
     for (auto i : res2)
-        std::cout << entries[i.first] << ", ";
+    {
+        if (i.first > 0)
+            std::cout << entries[i.first-1] << ", ";
+        else
+            std::cout << "_, ";
+    }
     std::cout << std::endl;
 
     std::sort(std::begin(entries), std::end(entries));

@@ -382,7 +382,8 @@ namespace mt
         //Functions used by the knn_query
         void knn_node_search(const T& ref, std::shared_ptr<tree_node> current, size_t k,
             std::vector<std::pair<R, std::weak_ptr<tree_node>>>& queue, std::vector<std::pair<ID, R>>& result);
-
+        void nn_list_update(const std::pair<ID, R>& in, size_t k, std::vector<std::pair<ID, R>>& result);
+        
         //insert functions, used to break up functionality or abstract away the implementation
         void insert(ID id, std::weak_ptr<T> t, std::weak_ptr<tree_node> node);
         void internal_node_insert(ID id, std::weak_ptr<T> t, std::weak_ptr<tree_node> N);
@@ -978,7 +979,9 @@ namespace mt
         {
             return a.first < b.first;
         };
-        std::vector<std::pair<ID, R>> result;
+        std::pair<ID, R> res_init;
+        res_init.second = std::numeric_limits<R>::max();
+        std::vector<std::pair<ID, R>> result(k, res_init);
         std::vector<std::pair<R, std::weak_ptr<tree_node>>> queue;
         if (root)
         {
@@ -1000,6 +1003,22 @@ namespace mt
     }
 
     template < class T, size_t C, typename R, typename ID>
+    void m_tree<T, C, R, ID>::nn_list_update(const std::pair<ID, R>& in, size_t k, std::vector<std::pair<ID, R>>& result)
+    {
+        auto sort_result = [](const std::pair<ID, R>& a, const std::pair<ID, R>& b)
+        {
+            ID invalid_id = ID();
+            return a.second < b.second || (a.first != b.first && b.first == invalid_id && a.second == b.second);
+        };
+        result.push_back(in);
+        std::sort(std::begin(result), std::end(result), sort_result);
+        if (result.size() > k)
+        {
+            result.erase(std::begin(result) + k, std::end(result));
+        }
+    }
+
+    template < class T, size_t C, typename R, typename ID>
     void m_tree<T, C, R, ID>::knn_node_search(const T& ref, std::shared_ptr<tree_node> current, size_t k,
         std::vector<std::pair<R, std::weak_ptr<tree_node>>>& queue, std::vector<std::pair<ID, R>>& result)
     {
@@ -1007,10 +1026,7 @@ namespace mt
         if (false == current)
             return;
 
-        auto sort_result = [](const std::pair<ID, R>& a, const std::pair<ID, R>& b)
-        {
-            return a.first < b.second;
-        };
+        
         auto remove_node = [](const std::pair<R, std::weak_ptr<tree_node>>& a, R threshold)
         {
             return a.first > threshold;
@@ -1041,11 +1057,14 @@ namespace mt
                     {
                         queue.push_back(std::make_pair(dmin, ro.covering_tree));
                         R dmax = value_distance + ro.covering_radius;
+                        if (dmax == 2)
+                            dmax =2;
                         if (dmax < dk)
                         {
-                            if (result.empty())
-                                dk = dmax;
-
+                            std::pair<ID, R> queue_value;
+                            queue_value.second = dmax;
+                            nn_list_update(queue_value, k, result);
+                            dk = result.back().second;
                             auto it = std::remove_if(std::begin(queue), std::end(queue), std::bind(remove_node, _1, dk));
                             if (it != std::end(queue))
                                 queue.erase(it);
@@ -1064,8 +1083,7 @@ namespace mt
                     R value_distance = d(*leaf.value, ref);
                     if (value_distance <= dk)
                     {
-                        result.push_back(std::make_pair(leaf.id, value_distance));
-                        std::sort(std::begin(result), std::end(result));
+                        nn_list_update(std::make_pair(leaf.id, value_distance), k, result);
                         dk = result.back().second;
                         auto it = std::remove_if(std::begin(queue), std::end(queue), std::bind(remove_node, _1, dk));
                         if (it != std::end(queue))
