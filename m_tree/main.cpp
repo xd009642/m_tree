@@ -25,6 +25,8 @@ int main()
         entries.push_back(temp);
         tree.insert(i+1, std::make_shared<double>(temp));
     }
+    tree.print(mt::RADIUS);
+    std::cout << std::endl;
     auto res=tree.range_query(60, 10);
     auto res2 = tree.knn_query(60, 3);
     for (int i : res)

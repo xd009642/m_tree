@@ -664,7 +664,7 @@ namespace mt
         }
         else if (partition_method == partition_algorithm::GEN_HYPERPLANE)
         {
-
+            BOOST_ASSERT_MSG(true, "generalised hyperplane partitioning not implemented");
         }
     }
 
@@ -981,7 +981,7 @@ namespace mt
         };
         std::pair<ID, R> res_init;
         res_init.second = std::numeric_limits<R>::max();
-        std::vector<std::pair<ID, R>> result(k, res_init);
+        std::vector<std::pair<ID, R>> result;// (k, res_init);
         std::vector<std::pair<R, std::weak_ptr<tree_node>>> queue;
         if (root)
         {
@@ -995,6 +995,14 @@ namespace mt
             queue.erase(current);
             knn_node_search(ref, node.lock(), k, queue, result);
         }
+        for (int i = 0; i < result.size(); i++)
+        {
+            if (result[i].first == ID())
+            {
+                result.erase(std::begin(result) + i);
+                i--;
+            }
+        }
         if (result.size() > k)
         {
             result.erase(std::begin(result) + k, std::end(result));
@@ -1007,15 +1015,27 @@ namespace mt
     {
         auto sort_result = [](const std::pair<ID, R>& a, const std::pair<ID, R>& b)
         {
-            ID invalid_id = ID();
-            return a.second < b.second || (a.first != b.first && b.first == invalid_id && a.second == b.second);
+            return a.second < b.second ;
         };
-        result.push_back(in);
+        bool inserted = false;
+        for (auto& p:result)
+        {
+            if (p.first == ID() && p.second == in.second)
+            {
+                p.first = in.first;
+                inserted = true;
+                break;
+            }
+        }
+        if (false == inserted)
+            result.push_back(in);
+        
         std::sort(std::begin(result), std::end(result), sort_result);
-        if (result.size() > k)
+
+        if(result.size()>k)
         {
             result.erase(std::begin(result) + k, std::end(result));
-        }
+        }       
     }
 
     template < class T, size_t C, typename R, typename ID>
@@ -1057,8 +1077,6 @@ namespace mt
                     {
                         queue.push_back(std::make_pair(dmin, ro.covering_tree));
                         R dmax = value_distance + ro.covering_radius;
-                        if (dmax == 2)
-                            dmax =2;
                         if (dmax < dk)
                         {
                             std::pair<ID, R> queue_value;
