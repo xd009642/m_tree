@@ -249,10 +249,10 @@ namespace mt
         {
             std::weak_ptr<T> value;
             std::shared_ptr<tree_node> covering_tree;
-            double covering_radius;
-            double distance;
+            R covering_radius;
+            R distance;
 
-            routing_object() :covering_radius(0), distance(0)
+            routing_object() :covering_radius(static_cast<R>(0)), distance(static_cast<R>(0))
             {}
 
             std::shared_ptr<T> reference_value()
@@ -270,7 +270,7 @@ namespace mt
             std::shared_ptr<T> value;
             ID id;
             R distance;
-            leaf_object() :distance(0)
+            leaf_object() :distance(static_cast<R>(0))
             {}
             std::shared_ptr<T> reference_value()
             {
@@ -711,6 +711,7 @@ namespace mt
             data_1 = route_set();
             data_2 = route_set();
         }
+        //TODO sort out the covering radius...
         save_object_to_set save_visitor;
         while ((false == d1.empty()) || (false == d2.empty()))
         {
