@@ -217,7 +217,30 @@ namespace mt
                 BOOST_ASSERT_MSG(typeid(X) != typeid(Y), "Error state entered");
             }
         };
+        
 
+        struct get_covering_radius :public boost::static_visitor<R>
+        {
+            R operator()(route_set& routers)
+            {
+                R result = static_cast<R>(0);
+                for (routing_object& ro : routers)
+                {
+                    result = std::max(result, ro.covering_radius + ro.distance);
+                }
+                return result;
+            }
+            
+            R operator()(leaf_set& leaves)
+            {
+                R result = static_cast<R>(0);
+                for (leaf_object& lo : leaves)
+                {
+                    result = std::max(result, lo.distance);
+                }
+                return result;
+            }
+        };
         /*
         * Node in the m-tree, is either a leaf or an internal node
         */
@@ -378,7 +401,8 @@ namespace mt
         }
 
     protected:
-
+        void update_covering_radius(std::weak_ptr<tree_node> parent);
+        
         //Functions used by the knn_query
         void knn_node_search(const T& ref, std::shared_ptr<tree_node> current, size_t k,
             std::vector<std::pair<R, std::weak_ptr<tree_node>>>& queue, std::vector<std::pair<ID, R>>& result);
@@ -551,6 +575,7 @@ namespace mt
                     }
                     ls[i].value = t.lock();
                     ls[i].id = id;
+                    update_covering_radius(lock->parent);
                     return;
                 }
             }
@@ -621,11 +646,41 @@ namespace mt
                         boost::variant<leaf_object, routing_object> temp=o2;
                         split(temp, p_lock);
                     }
+                    update_covering_radius(p_lock->parent);
                 }
             }
         }
     }
 
+    template < class T, size_t C, typename R, typename ID>
+    void m_tree<T, C, R, ID>::update_covering_radius(std::weak_ptr<tree_node> node)
+    {
+        if (auto locked = node.lock())
+        {
+            //leaf nodes do not have a radius.
+            if (locked->internal_node())
+            {
+                bool changed = false;
+                route_set& rs = boost::get<route_set>(locked->data);
+                get_covering_radius radius_getter;
+                for (routing_object& ro : rs)
+                {
+                    if (ro.value.expired())
+                        continue;
+                    R temp = boost::apply_visitor(radius_getter, ro.covering_tree->data);
+                    if (std::abs(temp - ro.covering_radius) > std::numeric_limits<R>::epsilon())
+                    {
+                        ro.covering_radius = temp;
+                        changed = true;
+                    }
+                }
+                if (changed)
+                {
+                    update_covering_radius(locked->parent);
+                }
+            }
+        }
+    }
 
     template < class T, size_t C, typename R, typename ID>
     void m_tree<T, C, R, ID>::promote(const data_vector& objs, routing_object& o1, routing_object& o2)
