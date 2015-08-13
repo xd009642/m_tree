@@ -197,6 +197,7 @@ namespace mt
         struct save_object_to_set :public boost::static_visitor<>
         {
             R distance;
+
             template<typename X>
             void operator ()(const X& x, std::array<X, C>& set)
             {
@@ -332,73 +333,7 @@ namespace mt
         std::vector<std::pair<ID, R>> knn_query(const T& ref, size_t k);
 
         //Here for debugging purposes
-        void print(print_level level = SPARSE, std::weak_ptr<tree_node> print_node = std::weak_ptr<tree_node>())
-        {
-            
-            std::vector<std::weak_ptr<tree_node>> queue;
-            if (print_node.lock())
-                queue.push_back(print_node);
-            else if (root)
-                queue.push_back(root);
-            while (false == queue.empty())
-            {
-                std::shared_ptr<tree_node> current = queue.front().lock();
-                queue.erase(queue.begin());
-                if (current->internal_node())
-                {
-                    route_set& ro_array = boost::get<route_set>(current->data);
-                    std::cout << "| ";
-                    for (size_t i = 0; i < ro_array.size(); i++)
-                    {
-                        if (i > 0)
-                            std::cout << ", ";
-                        if (auto lock = ro_array[i].value.lock())
-                        {
-                            std::cout << *lock;
-                            if (!level)
-                                std::cout << ":";
-                            if (level & print_level::DISTANCE)
-                                std::cout<< " " << ro_array[i].distance;
-                            if (level & print_level::RADIUS)
-                                std::cout << " " << ro_array[i].covering_radius;
-                            if (ro_array[i].covering_tree)
-                                queue.push_back(ro_array[i].covering_tree);
-                        }
-                        else
-                            std::cout << "_";
-                    }
-                    if (!current->parent.lock())
-                        std::cout << " no parent";
-                    std::cout << "| " << std::endl;
-                }
-                else if (current->leaf_node())
-                {
-                    leaf_set& lo_array = boost::get<leaf_set>(current->data);
-                    std::cout << "| ";
-                    for (size_t i = 0; i < lo_array.size(); i++)
-                    {
-                        if (i > 0)
-                            std::cout << ", ";
-                        if (lo_array[i].value)
-                        {
-                            std::cout << *lo_array[i].value;
-                            if (!level)
-                                std::cout << ":";
-                            if (level & print_level::DISTANCE)
-                                std::cout << " " << lo_array[i].distance;
-                        }
-                        else
-                        {
-                            std::cout << "_";
-                        }
-                    }
-                    if (!current->parent.lock())
-                        std::cout << " no parent";
-                    std::cout << "| " << std::endl;
-
-                }
-            }
-        }
+        void print(print_level level = SPARSE, std::weak_ptr<tree_node> print_node = std::weak_ptr<tree_node>());
 
     protected:
         void update_covering_radius(std::weak_ptr<tree_node> parent);
@@ -713,22 +648,24 @@ namespace mt
         {
             calculate_distance_matrix(o, distances);
         }
+        BOOST_ASSERT_MSG(distances.size() == o.size()*o.size(), "NOT ENOUGH DISTANCES");
         if (partition_method == partition_algorithm::BALANCED)
         {
             balanced_partition(o, distances, n1, n2);
         }
         else if (partition_method == partition_algorithm::GEN_HYPERPLANE)
         {
-            BOOST_ASSERT_MSG(true, "generalised hyperplane partitioning not implemented");
+            generalised_partition(o, distances, n1, n2);
         }
     }
 
 
     template < class T, size_t C, typename R, typename ID>
-    void m_tree<T, C, R, ID>::balanced_partition(const data_vector& o, std::vector<R> distances, routing_object& n1, routing_object& n2)
+    void m_tree<T, C, R, ID>::balanced_partition(const data_vector& o, std::vector<R> distances, 
+        routing_object& n1, routing_object& n2)
     {
         using namespace std::placeholders;
-        BOOST_ASSERT_MSG(distances.size() == o.size()*o.size(), "NOT ENOUGH DISTANCES");
+        
         auto if_routing = [](boost::variant<leaf_object, routing_object> x, std::weak_ptr<T> y){
             get_node_value getter;
             auto temp = boost::apply_visitor(getter, x);
@@ -766,7 +703,7 @@ namespace mt
             data_1 = route_set();
             data_2 = route_set();
         }
-        //TODO sort out the covering radius...
+
         save_object_to_set save_visitor;
         while ((false == d1.empty()) || (false == d2.empty()))
         {
@@ -807,6 +744,83 @@ namespace mt
         n2.covering_tree->data = data_2;
     }
 
+    template < class T, size_t C, typename R, typename ID>
+    void m_tree<T, C, R, ID>::generalised_partition(const data_vector& o, std::vector<R> distances, 
+        routing_object& n1, routing_object& n2)
+    {
+        using namespace std::placeholders;
+
+        auto if_routing = [](boost::variant<leaf_object, routing_object> x, std::weak_ptr<T> y){
+            get_node_value getter;
+            auto temp = boost::apply_visitor(getter, x);
+            return temp == y.lock();
+        };
+        size_t n1_index = std::distance(std::begin(o), std::find_if(std::begin(o), std::end(o), std::bind(if_routing, _1, n1.value)));
+        size_t n2_index = std::distance(std::begin(o), std::find_if(std::begin(o), std::end(o), std::bind(if_routing, _1, n2.value)));
+        std::vector<R> d1(o.size()), d2(o.size());
+        
+        BOOST_ASSERT_MSG(n1_index != n2_index, "PROMOTE FUNCTION CHOSE THE SAME OBJECTS");
+        for (size_t i = 0; i < o.size(); i++)
+        {
+            d1[i] = distances[o.size()*n1_index + i];
+            d2[i] = distances[o.size()*n2_index + i];
+        }
+
+        data_variant data_1, data_2;
+        if (o[0].type() == typeid(leaf_object))
+        {
+            data_1 = leaf_set();
+            data_2 = leaf_set();
+        }
+        else
+        {
+            data_1 = route_set();
+            data_2 = route_set();
+        }
+        save_object_to_set save_visitor;
+        size_t x = 0, y = 0, fill = 0;
+        while (fill < o.size())
+        {
+            auto min_d1 = std::min_element(std::begin(d1), std::end(d1));
+            auto min_d2 = std::min_element(std::begin(d2), std::end(d2));
+            
+            if ((*min_d1 < *min_d2 && x<C) || (y>=C) )
+            {
+                size_t d1_index = std::distance(std::begin(d1), min_d1);
+                if (n1.covering_radius < d1[d1_index])
+                    n1.covering_radius = d1[d1_index];
+                
+                save_visitor.distance = d1[d1_index];
+                boost::apply_visitor(save_visitor, o[d1_index], data_1);
+                d1[d1_index] = std::numeric_limits<R>::max();
+                d2[d1_index] = std::numeric_limits<R>::max();
+                x++; fill++;
+            }
+            else
+            {
+
+                size_t d2_index = std::distance(std::begin(d2), min_d2);
+                if (n2.covering_radius < d2[d2_index])
+                    n2.covering_radius = d2[d2_index];
+
+                save_visitor.distance = d2[d2_index];
+                boost::apply_visitor(save_visitor, o[d2_index], data_2);
+                d1[d2_index] = std::numeric_limits<R>::max();
+                d2[d2_index] = std::numeric_limits<R>::max();
+                y++; fill++;
+            }
+        }
+        update_parent parent_visitor(d);
+        n1.covering_tree = std::make_shared<tree_node>();
+        parent_visitor.parent = n1.covering_tree;
+        boost::apply_visitor(parent_visitor, o[n1_index], data_1);
+        n1.covering_tree->data = data_1;
+
+        n2.covering_tree = std::make_shared<tree_node>();
+        parent_visitor.parent = n2.covering_tree;
+        boost::apply_visitor(parent_visitor, o[n2_index], data_2);
+        n2.covering_tree->data = data_2;
+    }
 
     template < class T, size_t C, typename R, typename ID>
     void m_tree<T, C, R, ID>::minimise_radius(const data_vector& objects, routing_object& o1, routing_object& o2)
@@ -1164,6 +1178,78 @@ namespace mt
                             queue.erase(it);
                     }
                 }
+            }
+        }
+    }
+
+
+    template < class T, size_t C, typename R, typename ID>
+    void m_tree<T, C, R, ID>::print(print_level level = SPARSE, std::weak_ptr<tree_node> print_node = std::weak_ptr<tree_node>())
+    {
+
+        std::vector<std::weak_ptr<tree_node>> queue;
+        if (print_node.lock())
+            queue.push_back(print_node);
+        else if (root)
+            queue.push_back(root);
+        while (false == queue.empty())
+        {
+            std::shared_ptr<tree_node> current = queue.front().lock();
+            queue.erase(queue.begin());
+            if (current->internal_node())
+            {
+                route_set& ro_array = boost::get<route_set>(current->data);
+                std::cout << "| ";
+                for (size_t i = 0; i < ro_array.size(); i++)
+                {
+                    if (i > 0)
+                        std::cout << ", ";
+                    if (auto lock = ro_array[i].value.lock())
+                    {
+                        std::cout << *lock;
+                        if (!level)
+                            std::cout << ":";
+                        if (level & print_level::DISTANCE)
+                            std::cout << " " << ro_array[i].distance;
+                        if (level & print_level::RADIUS)
+                        {
+                            std::cout << " " << ro_array[i].covering_radius;
+                        }
+                        if (ro_array[i].covering_tree)
+                            queue.push_back(ro_array[i].covering_tree);
+                    }
+                    else
+                        std::cout << "_";
+                }
+                if (!current->parent.lock())
+                    std::cout << " no parent";
+                std::cout << "| " << std::endl;
+            }
+            else if (current->leaf_node())
+            {
+                leaf_set& lo_array = boost::get<leaf_set>(current->data);
+                std::cout << "| ";
+                for (size_t i = 0; i < lo_array.size(); i++)
+                {
+                    if (i > 0)
+                        std::cout << ", ";
+                    if (lo_array[i].value)
+                    {
+                        std::cout << *lo_array[i].value;
+                        if (!level)
+                            std::cout << ":";
+                        if (level & print_level::DISTANCE)
+                            std::cout << " " << lo_array[i].distance;
+                    }
+                    else
+                    {
+                        std::cout << "_";
+                    }
+                }
+                if (!current->parent.lock())
+                    std::cout << " no parent";
+                std::cout << "| " << std::endl;
+
             }
         }
     }
