@@ -460,21 +460,27 @@ namespace mt
                 {
                     if (auto temp = rs[i].value.lock())
                     {
-                        distances[i] = d(*t_locked, *temp);
+                        R distance = d(*t_locked, *temp);
+                        if (distance <= rs[i].covering_radius)
+                            distances[i] = distance;
                     }
                 }
-            }
-            auto min_router = std::min_element(std::begin(distances), std::end(distances));
-            if (*min_router > rs[std::distance(std::begin(distances), min_router)].covering_radius)
-            {
-                for (size_t i = 0; i < rs.size(); i++)
+            
+                auto min_router = std::min_element(std::begin(distances), std::end(distances));
+                if (*min_router > rs[std::distance(std::begin(distances), min_router)].covering_radius)
                 {
-                    distances[i] -= rs[i].covering_radius;
+                    for (size_t i = 0; i < rs.size(); i++)
+                    {
+                        if (auto temp = rs[i].value.lock())
+                        {
+                            distances[i] = d(*t_locked, *temp) - rs[i].covering_radius;
+                        }
+                    }
+                    min_router = std::min_element(std::begin(distances), std::end(distances));
+                    rs[std::distance(std::begin(distances), min_router)].covering_radius += *min_router;
                 }
-                min_router = std::min_element(std::begin(distances), std::end(distances));
-                rs[std::distance(std::begin(distances), min_router)].covering_radius = *min_router;
+                insert(id, t, rs[std::distance(std::begin(distances), min_router)].covering_tree);
             }
-            insert(id, t, rs[std::distance(std::begin(distances), min_router)].covering_tree);
         }
     }
 
