@@ -25,7 +25,7 @@ Here is a simple example showing insertion and querying of an m-tree.
 ```cpp
 //template arguments are: object reference, node capacity, distance function return value and id type
 //distance function is an std::function object and examples will be in a the tests
-mt::m_tree<double, 3, double, int> tree = mt::m_tree<double, 3, double, size_t>(distance_function);
+auto tree = mt::m_tree<double, 3, double, size_t>(distance_function);
 std::vector<size_t> insertions;
 //insertion
 for(size_t i=0; i<10; i++)
