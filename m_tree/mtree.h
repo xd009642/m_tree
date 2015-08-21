@@ -313,20 +313,11 @@ namespace mt
         void set_partition_algorithm(partition_algorithm algorithm);
 
         size_t size() const;
+        double fat_factor() const;
         bool empty() const;
 
         void insert(ID id, std::shared_ptr<T> t);
-
-        void clear()
-        {
-            //Need to ensure that the children are deleted...
-            root.reset();
-        }
-
-        void erase();
-
-        // pre/in/post order
-        //begin end
+        void clear();
 
         //range and nearest neighbour searches
         std::vector<ID> range_query(const T& ref, R range);
@@ -367,15 +358,13 @@ namespace mt
         void calculate_distance_matrix(const data_vector& n, std::vector<R>& dst);
 
     private:
+        size_t tree_size;
         std::function<R(const T&, const T&)> d;
         std::shared_ptr<tree_node> root;
         std::map<split_policy, partition_function> split_functions;
         split_policy policy;
         partition_algorithm partition_method;
     };
-
-
-
 
 
 
@@ -397,6 +386,30 @@ namespace mt
     m_tree<T, C, R, ID>::~m_tree()
     {
 
+    }
+
+    template < class T, size_t C, typename R, typename ID>
+    size_t m_tree<T, C, R, ID>::size() const
+    {
+        return tree_size;
+    }
+
+    template < class T, size_t C, typename R, typename ID>
+    double m_tree<T, C, R, ID>::fat_factor() const
+    {
+        /*
+        fat = ((Ic - h*n)/n)*(1/(m-h))
+        Ic = total Disk Access Cost (DAC) of all n point queries
+        h = height
+        n = number of ground objects
+        m = number of nodes
+        */
+    }
+
+    template < class T, size_t C, typename R, typename ID>
+    void m_tree<T, C, R, ID>::clear()
+    {
+        root.reset();
     }
 
     template < class T, size_t C, typename R, typename ID>
@@ -426,6 +439,7 @@ namespace mt
             root = std::make_shared<tree_node>();
         }
         insert(id, t, root);
+        tree_size++;
     }
 
     template < class T, size_t C, typename R, typename ID>
