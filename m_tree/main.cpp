@@ -20,17 +20,19 @@ int main()
     mt::m_tree<double, 3> tree = mt::m_tree<double, 3>(std::function<double(const double&, const double&)>(l2));
     tree.set_partition_algorithm(mt::partition_algorithm::GEN_HYPERPLANE);
     std::vector<double> entries;
-    for (size_t i = 0; i < 15; i++)
+
+    for (size_t i = 0; i < 10; i++)
     {
         double temp = (double)(rand() % 100);
         if (temp == 45)
             temp = 45;
         entries.push_back(temp);
         tree.insert(i + 1, std::make_shared<double>(temp));
-        tree.print(mt::RADIUS);
-        std::cout << std::endl;
+
+
     }
     tree.print(mt::RADIUS);
+    auto ff= tree.fat_factor();
     std::cout << std::endl;
     auto res=tree.range_query(60, 10);
     auto res2 = tree.knn_query(60, 3);

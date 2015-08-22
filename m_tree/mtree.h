@@ -327,6 +327,10 @@ namespace mt
         void print(print_level level = SPARSE, std::weak_ptr<tree_node> print_node = std::weak_ptr<tree_node>());
 
     protected:
+        //For internal use only d is for the recursive call, optional count variable counts number of 
+        //nodes in the tree. Needs tidying at some point
+        size_t depth(std::weak_ptr<tree_node> node) const;
+
         void update_covering_radius(std::weak_ptr<tree_node> parent);
         
         //Functions used by the knn_query
@@ -372,6 +376,7 @@ namespace mt
 
     template < class T, size_t C, typename R, typename ID>
     m_tree<T, C, R, ID>::m_tree(distance_function dist_func) :
+        tree_size(0),
         d(dist_func),
         policy(split_policy::M_LB_DIST),
         partition_method(partition_algorithm::BALANCED)
@@ -389,6 +394,12 @@ namespace mt
     }
 
     template < class T, size_t C, typename R, typename ID>
+    bool m_tree<T, C, R, ID>::empty() const
+    {
+        return 0 == tree_size;
+    }
+
+    template < class T, size_t C, typename R, typename ID>
     size_t m_tree<T, C, R, ID>::size() const
     {
         return tree_size;
@@ -401,9 +412,42 @@ namespace mt
         fat = ((Ic - h*n)/n)*(1/(m-h))
         Ic = total Disk Access Cost (DAC) of all n point queries
         h = height
-        n = number of ground objects
+        n = number of ground objects = tree_size
         m = number of nodes
         */
+
+        /*
+            To calculate total DAC need to get every reference object and total up the 
+            number of nodes each object can be contained within.
+        */
+        if (false == root)
+            return 0.0;
+        size_t m = 0, Ic = 0;
+        size_t h = depth(root); 
+        
+        //calculate values
+
+        return static_cast<double>(Ic - h * tree_size) / static_cast<double>(tree_size * (m - h));
+
+    }
+
+    template < class T, size_t C, typename R, typename ID>
+    size_t m_tree<T, C, R, ID>::depth(std::weak_ptr<tree_node> node) const
+    {
+        if (auto lock = node.lock())
+        {
+            std::vector<std::weak_ptr<tree_node>> trees;
+            get_subtrees getter(trees);
+            boost::apply_visitor(getter, lock->data);
+            std::array<size_t, C> depths;
+            std::fill(std::begin(depths), std::end(depths), 0);
+            for (size_t i = 0; i < trees.size(); i++)
+            {
+                depths[i] = depth(trees[i]);
+            }
+            return (*std::max_element(std::begin(depths), std::end(depths))) + 1;
+        }
+        return 0;
     }
 
     template < class T, size_t C, typename R, typename ID>
@@ -1206,7 +1250,6 @@ namespace mt
     template < class T, size_t C, typename R, typename ID>
     void m_tree<T, C, R, ID>::print(print_level level = SPARSE, std::weak_ptr<tree_node> print_node = std::weak_ptr<tree_node>())
     {
-
         std::vector<std::weak_ptr<tree_node>> queue;
         if (print_node.lock())
             queue.push_back(print_node);
