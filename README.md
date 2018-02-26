@@ -1,5 +1,7 @@
 # m_tree
 
+## This project has been abandoned but does have working code. If anyone is interested in it continuing raise an issue and I'll see what I can sort out!
+
 ## Synopsis
 
 Implementation of an metric-tree data structure. M-trees are a structure designed to group together objects in a generic metric space given a distance function that satisifies some constraints. They are designed to allow for fast range queries and nearest neighbour queries for objects such as images with a high number of features making R-trees or other alternatives infeasible.
